@@ -1,11 +1,10 @@
-//go:build fts5
-// +build fts5
-
 package db
 
 import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/ishrq/recur/internal/models"
 )
 
 func InitDB(dbPath string) (*sql.DB, error) {
@@ -70,4 +69,29 @@ func createTables(db *sql.DB) error {
 
 	_, err := db.Exec(schema)
 	return err
+}
+
+func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
+	query := `
+		INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	result, err := db.Exec(query,
+		task.Name,
+		task.DueDate,
+		task.CreatedDate,
+		task.CompletedDate,
+		task.Tag,
+		task.Project,
+		task.Priority,
+		task.Note,
+		task.LastTaskID,
+	)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
 }

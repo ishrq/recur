@@ -1,21 +1,25 @@
 package commands
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 )
 
-func Execute() {
+func Execute(db *sql.DB) {
 	if len(os.Args) < 2 {
 		printHelp()
 		return
 	}
 
 	command := os.Args[1]
+	args := os.Args[2:]
+
+	var err error
 
 	switch command {
 	case "add":
-		fmt.Println("Add command - not yet implemented")
+		err = Add(db, args)
 	case "ls":
 		fmt.Println("List command - not yet implemented")
 	case "done":
@@ -31,6 +35,12 @@ func Execute() {
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printHelp()
+		os.Exit(1)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
 

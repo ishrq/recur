@@ -28,7 +28,7 @@ func run() error {
 	}
 	defer database.Close()
 
-	commands.Execute()
+	commands.Execute(database)
 
 	return nil
 }
