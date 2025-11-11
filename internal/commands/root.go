@@ -29,7 +29,7 @@ func Execute(db *sql.DB) {
 	case "cp", "copy":
 		err = Copy(db, args)
 	case "mv":
-		fmt.Println("Move command - not yet implemented")
+		err = Move(db, args)
 	case "help", "--help", "-h":
 		if len(args) > 0 {
 			PrintHelp(args[0])

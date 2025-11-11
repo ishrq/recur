@@ -290,3 +290,37 @@ func DeleteTask(db *sql.DB, id int) error {
 
 	return nil
 }
+
+func UpdateTask(db *sql.DB, task *models.Task) error {
+	query := `
+	UPDATE tasks
+	SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?
+	WHERE id = ? AND deleted = 0
+	`
+
+	result, err := db.Exec(query,
+		task.Name,
+		task.DueDate,
+		task.Tag,
+		task.Project,
+		task.Priority,
+		task.Note,
+		task.LastTaskID,
+		task.ID,
+		)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("task not found or already deleted")
+	}
+
+	return nil
+}
