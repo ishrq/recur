@@ -37,37 +37,17 @@ func createTables(db *sql.DB) error {
 	priority TEXT,
 	note TEXT,
 	last_task_id INTEGER,
-	deleted INTEGER DEFAULT 0
+	deleted INTEGER DEFAULT 0,
+	recur_frequency TEXT,
+	recur_end_date DATETIME
 	);
-
-	CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
-	name,
-	tag,
-	project,
-	note,
-	content=tasks,
-	content_rowid=id
-	);
-
-	CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
-	INSERT INTO tasks_fts(rowid, name, tag, project, note)
-	VALUES (new.id, new.name, new.tag, new.project, new.note);
-	END;
-
-	CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-	DELETE FROM tasks_fts WHERE rowid = old.id;
-	END;
-
-	CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-	UPDATE tasks_fts SET name=new.name, tag=new.tag, project=new.project, note=new.note
-	WHERE rowid=old.id;
-	END;
 
 	CREATE INDEX IF NOT EXISTS idx_due_date ON tasks(due_date);
 	CREATE INDEX IF NOT EXISTS idx_tag ON tasks(tag);
 	CREATE INDEX IF NOT EXISTS idx_project ON tasks(project);
 	CREATE INDEX IF NOT EXISTS idx_completed_date ON tasks(completed_date);
 	CREATE INDEX IF NOT EXISTS idx_deleted ON tasks(deleted);
+	CREATE INDEX IF NOT EXISTS idx_recur_frequency ON tasks(recur_frequency);
 	`
 
 	_, err := db.Exec(schema)
@@ -76,8 +56,8 @@ func createTables(db *sql.DB) error {
 
 func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	query := `
-	INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id, recur_frequency, recur_end_date)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := db.Exec(query,
@@ -90,7 +70,9 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 		task.Priority,
 		task.Note,
 		task.LastTaskID,
-		)
+		task.RecurFrequency,
+		task.RecurEndDate,
+	)
 
 	if err != nil {
 		return 0, err
@@ -101,10 +83,10 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 
 func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
 	query := `
-	SELECT id, name, due_date, created_date, completed_date,
-	tag, project, priority, note, last_task_id
-	FROM tasks
-	WHERE deleted = 0
+		SELECT id, name, due_date, created_date, completed_date,
+		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+		FROM tasks
+		WHERE deleted = 0
 	`
 
 	if !includeCompleted {
@@ -133,8 +115,8 @@ func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
 
 func scanTask(rows *sql.Rows) (models.Task, error) {
 	var task models.Task
-	var dueDate, completedDate sql.NullTime
-	var tag, project, priority, note sql.NullString
+	var dueDate, completedDate, recurEndDate sql.NullTime
+	var tag, project, priority, note, recurFrequency sql.NullString
 	var lastTaskID sql.NullInt64
 
 	err := rows.Scan(
@@ -148,7 +130,9 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 		&priority,
 		&note,
 		&lastTaskID,
-		)
+		&recurFrequency,
+		&recurEndDate,
+	)
 
 	if err != nil {
 		return task, err
@@ -177,23 +161,29 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 		id := int(lastTaskID.Int64)
 		task.LastTaskID = &id
 	}
+	if recurFrequency.Valid {
+		task.RecurFrequency = recurFrequency.String
+	}
+	if recurEndDate.Valid {
+		task.RecurEndDate = &recurEndDate.Time
+	}
 
 	return task, nil
 }
 
 func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 	query := `
-	SELECT id, name, due_date, created_date, completed_date,
-	tag, project, priority, note, last_task_id
-	FROM tasks
-	WHERE id = ? AND deleted = 0
+		SELECT id, name, due_date, created_date, completed_date,
+		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+		FROM tasks
+		WHERE id = ? AND deleted = 0
 	`
 
 	row := db.QueryRow(query, id)
 
 	var task models.Task
-	var dueDate, completedDate sql.NullTime
-	var tag, project, priority, note sql.NullString
+	var dueDate, completedDate, recurEndDate sql.NullTime
+	var tag, project, priority, note, recurFrequency sql.NullString
 	var lastTaskID sql.NullInt64
 
 	err := row.Scan(
@@ -207,7 +197,9 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 		&priority,
 		&note,
 		&lastTaskID,
-		)
+		&recurFrequency,
+		&recurEndDate,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task not found")
@@ -238,6 +230,12 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 	if lastTaskID.Valid {
 		id := int(lastTaskID.Int64)
 		task.LastTaskID = &id
+	}
+	if recurFrequency.Valid {
+		task.RecurFrequency = recurFrequency.String
+	}
+	if recurEndDate.Valid {
+		task.RecurEndDate = &recurEndDate.Time
 	}
 
 	return &task, nil
@@ -293,9 +291,9 @@ func DeleteTask(db *sql.DB, id int) error {
 
 func UpdateTask(db *sql.DB, task *models.Task) error {
 	query := `
-	UPDATE tasks
-	SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?
-	WHERE id = ? AND deleted = 0
+		UPDATE tasks
+		SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?, recur_frequency = ?, recur_end_date = ?
+		WHERE id = ? AND deleted = 0
 	`
 
 	result, err := db.Exec(query,
@@ -306,8 +304,10 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 		task.Priority,
 		task.Note,
 		task.LastTaskID,
+		task.RecurFrequency,
+		task.RecurEndDate,
 		task.ID,
-		)
+	)
 
 	if err != nil {
 		return err

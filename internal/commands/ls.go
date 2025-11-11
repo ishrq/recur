@@ -52,7 +52,10 @@ func printTasks(tasks []models.Task) {
 			line += fmt.Sprintf(" [%s]", dueStr)
 		}
 
-		// Add project/tag/priority if present
+		if task.RecurFrequency != "" {
+			line += fmt.Sprintf(" ↻ %s", task.RecurFrequency)
+		}
+
 		var metadata []string
 		if task.Project != "" {
 			metadata = append(metadata, "+"+task.Project)

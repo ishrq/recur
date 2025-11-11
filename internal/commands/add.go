@@ -39,6 +39,12 @@ func Add(database *sql.DB, args []string) error {
 	if task.DueDate != nil {
 		fmt.Printf("  Due: %s\n", task.DueDate.Format("Mon Jan 2, 2006 15:04"))
 	}
+	if task.RecurFrequency != "" {
+		fmt.Printf("  Recurs: %s\n", task.RecurFrequency)
+	}
+	if task.RecurEndDate != nil {
+		fmt.Printf("  Until: %s\n", task.RecurEndDate.Format("Mon Jan 2, 2006"))
+	}
 	if task.Project != "" {
 		fmt.Printf("  Project: %s\n", task.Project)
 	}

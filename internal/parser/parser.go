@@ -104,7 +104,6 @@ func extractPriority(input string, task *models.Task) string {
 	return input
 }
 
-// NOTE: Parse the due date string (basic implementation)
 // Format: "date time, frequency, end"
 func parseDueDateString(dateStr string, task *models.Task) {
 	parts := strings.Split(dateStr, ",")
@@ -118,8 +117,59 @@ func parseDueDateString(dateStr string, task *models.Task) {
 		}
 	}
 
-	// TODO: Parse frequency (second part) - will implement in next step
-	// TODO: Parse end date (third part) - will implement in next step
+	// Parse second part: frequency (e.g., 1d, 1w, 2m, 1y, 12h)
+	if len(parts) > 1 && strings.TrimSpace(parts[1]) != "" {
+		frequencyStr := strings.TrimSpace(parts[1])
+		if isValidFrequency(frequencyStr) {
+			task.RecurFrequency = frequencyStr
+		}
+	}
+
+	// Parse third part: end date
+	if len(parts) > 2 && strings.TrimSpace(parts[2]) != "" {
+		endDateStr := strings.TrimSpace(parts[2])
+		parsedEndDate := parseDateTime(endDateStr)
+		if parsedEndDate != nil {
+			task.RecurEndDate = parsedEndDate
+		}
+	}
+}
+
+func isValidFrequency(freq string) bool {
+	re := regexp.MustCompile(`^(\d+)([hdwmy])$`)
+	return re.MatchString(freq)
+}
+
+func ParseFrequency(freq string) (time.Duration, error) {
+	re := regexp.MustCompile(`^(\d+)([hdwmy])$`)
+	matches := re.FindStringSubmatch(freq)
+
+	if len(matches) != 3 {
+		return 0, fmt.Errorf("invalid frequency format: %s", freq)
+	}
+
+	amount := matches[1]
+	unit := matches[2]
+
+	var num int
+	fmt.Sscanf(amount, "%d", &num)
+
+	switch unit {
+	case "h":
+		return time.Duration(num) * time.Hour, nil
+	case "d":
+		return time.Duration(num) * 24 * time.Hour, nil
+	case "w":
+		return time.Duration(num) * 7 * 24 * time.Hour, nil
+	case "m":
+		// Approximate: 30 days per month
+		return time.Duration(num) * 30 * 24 * time.Hour, nil
+	case "y":
+		// Approximate: 365 days per year
+		return time.Duration(num) * 365 * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("unknown frequency unit: %s", unit)
+	}
 }
 
 // parseDateTime parses various date/time formats
