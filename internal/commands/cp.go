@@ -9,6 +9,7 @@ import (
 
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/models"
+	"github.com/ishrq/recur/internal/parser"
 )
 
 func Copy(database *sql.DB, args []string) error {
@@ -66,10 +67,28 @@ func Copy(database *sql.DB, args []string) error {
 			Note:        task.Note,
 		}
 
-		// NOTE: If modification string provided, update the name for now
-		// Full parsing will be implemented later
+		// If modification string provided, parse and merge changes
 		if modifyStr != "" {
-			newTask.Name = modifyStr
+			parsedChanges, err := parser.ParseTaskString(modifyStr)
+			if err == nil {
+				// Merge changes (new values override old ones)
+				newTask.Name = parsedChanges.Name
+				if parsedChanges.DueDate != nil {
+					newTask.DueDate = parsedChanges.DueDate
+				}
+				if parsedChanges.Tag != "" {
+					newTask.Tag = parsedChanges.Tag
+				}
+				if parsedChanges.Project != "" {
+					newTask.Project = parsedChanges.Project
+				}
+				if parsedChanges.Priority != "" {
+					newTask.Priority = parsedChanges.Priority
+				}
+				if parsedChanges.Note != "" {
+					newTask.Note = parsedChanges.Note
+				}
+			}
 		}
 
 		newID, err := db.InsertTask(database, newTask)

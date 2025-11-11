@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/parser"
 )
 
 func Move(database *sql.DB, args []string) error {
@@ -37,10 +38,31 @@ func Move(database *sql.DB, args []string) error {
 		return fmt.Errorf("task #%d not found", id)
 	}
 
-	// NOTE: For now, just update the name
-	// Full parsing for @() #tag !project etc. will be implemented later
+	parsedChanges, err := parser.ParseTaskString(modifyStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse changes: %w", err)
+	}
+
+	// Store old values for display
 	oldName := task.Name
-	task.Name = modifyStr
+
+	// Merge changes (new values override old ones)
+	task.Name = parsedChanges.Name
+	if parsedChanges.DueDate != nil {
+		task.DueDate = parsedChanges.DueDate
+	}
+	if parsedChanges.Tag != "" {
+		task.Tag = parsedChanges.Tag
+	}
+	if parsedChanges.Project != "" {
+		task.Project = parsedChanges.Project
+	}
+	if parsedChanges.Priority != "" {
+		task.Priority = parsedChanges.Priority
+	}
+	if parsedChanges.Note != "" {
+		task.Note = parsedChanges.Note
+	}
 
 	if err := db.UpdateTask(database, task); err != nil {
 		return fmt.Errorf("failed to update task: %w", err)

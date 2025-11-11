@@ -4,10 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ishrq/recur/internal/db"
-	"github.com/ishrq/recur/internal/models"
+	"github.com/ishrq/recur/internal/parser"
 )
 
 func Add(database *sql.DB, args []string) error {
@@ -20,20 +19,38 @@ func Add(database *sql.DB, args []string) error {
 		return nil
 	}
 
-	// NOTE: For now, join all args as the task name
-	// Add parsing for @() #tag !project etc. later
-	taskName := strings.Join(args, " ")
+	taskString := strings.Join(args, " ")
 
-	task := &models.Task{
-		Name:        taskName,
-		CreatedDate: time.Now(),
+	// Parse the task string
+	task, err := parser.ParseTaskString(taskString)
+	if err != nil {
+		return fmt.Errorf("failed to parse task: %w", err)
 	}
 
+	// Insert task
 	id, err := db.InsertTask(database, task)
 	if err != nil {
 		return fmt.Errorf("failed to add task: %w", err)
 	}
 
-	fmt.Printf("Added task #%d: %s\n", id, taskName)
+	// Display confirmation
+	fmt.Printf("Added task #%d: %s\n", id, task.Name)
+
+	if task.DueDate != nil {
+		fmt.Printf("  Due: %s\n", task.DueDate.Format("Mon Jan 2, 2006 15:04"))
+	}
+	if task.Project != "" {
+		fmt.Printf("  Project: %s\n", task.Project)
+	}
+	if task.Tag != "" {
+		fmt.Printf("  Tag: %s\n", task.Tag)
+	}
+	if task.Priority != "" {
+		fmt.Printf("  Priority: %s\n", task.Priority)
+	}
+	if task.Note != "" {
+		fmt.Printf("  Note: %s\n", task.Note)
+	}
+
 	return nil
 }

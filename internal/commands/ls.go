@@ -55,7 +55,7 @@ func printTasks(tasks []models.Task) {
 		// Add project/tag/priority if present
 		var metadata []string
 		if task.Project != "" {
-			metadata = append(metadata, "!"+task.Project)
+			metadata = append(metadata, "+"+task.Project)
 		}
 		if task.Tag != "" {
 			metadata = append(metadata, "#"+task.Tag)

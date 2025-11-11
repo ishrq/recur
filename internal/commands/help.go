@@ -30,17 +30,17 @@ func PrintHelp(command string) {
 			Description: "Add a new task",
 			Usage: []string{
 				"recur add \"Task name\"",
-				"recur add \"Task name @(date time, frequency, end) #tag !project !priority *note\"",
+				"recur add \"Task name @(date time, frequency, end) #tag +project !priority *note\"",
 			},
 			Examples: []string{
 				"recur add \"Buy groceries\"",
-				"recur add \"Team meeting @(2025-11-12 15:00) !Work\"",
-				"recur add \"Water plants @(today 9am, 1d) #chores\"",
+				"recur add \"Team meeting @(2025-11-12 15:00) +Work\"",
+				"recur add \"Water plants @(today 9am, 1d) #chores !urgent\"",
 			},
 			ComingSoon: []string{
 				"@(date time, frequency, end)  - Due date and recurrence",
 				"#tag                          - Add a tag",
-				"!project                      - Add to project",
+				"+project                      - Add to project",
 				"!priority                     - Set priority",
 				"*note                         - Add a note",
 			},
