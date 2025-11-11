@@ -24,9 +24,9 @@ func Execute(db *sql.DB) {
 		err = List(db, args)
 	case "done":
 		err = Done(db, args)
-	case "rm", "remove":
+	case "rm":
 		err = Remove(db, args)
-	case "cp", "copy":
+	case "cp":
 		err = Copy(db, args)
 	case "mv":
 		err = Move(db, args)
