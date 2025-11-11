@@ -2,6 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"time"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/ishrq/recur/internal/models"
@@ -176,4 +179,90 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 	}
 
 	return task, nil
+}
+
+func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
+	query := `
+	SELECT id, name, due_date, created_date, completed_date,
+	tag, project, priority, note, last_task_id
+	FROM tasks
+	WHERE id = ? AND deleted = 0
+	`
+
+	row := db.QueryRow(query, id)
+
+	var task models.Task
+	var dueDate, completedDate sql.NullTime
+	var tag, project, priority, note sql.NullString
+	var lastTaskID sql.NullInt64
+
+	err := row.Scan(
+		&task.ID,
+		&task.Name,
+		&dueDate,
+		&task.CreatedDate,
+		&completedDate,
+		&tag,
+		&project,
+		&priority,
+		&note,
+		&lastTaskID,
+		)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("task not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert nullable fields
+	if dueDate.Valid {
+		task.DueDate = &dueDate.Time
+	}
+	if completedDate.Valid {
+		task.CompletedDate = &completedDate.Time
+	}
+	if tag.Valid {
+		task.Tag = tag.String
+	}
+	if project.Valid {
+		task.Project = project.String
+	}
+	if priority.Valid {
+		task.Priority = priority.String
+	}
+	if note.Valid {
+		task.Note = note.String
+	}
+	if lastTaskID.Valid {
+		id := int(lastTaskID.Int64)
+		task.LastTaskID = &id
+	}
+
+	return &task, nil
+}
+
+func MarkTaskDone(db *sql.DB, id int) error {
+	query := `
+	UPDATE tasks
+	SET completed_date = ?
+	WHERE id = ? AND deleted = 0
+	`
+
+	result, err := db.Exec(query, time.Now(), id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("task not found or already deleted")
+	}
+
+	return nil
 }
