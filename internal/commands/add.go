@@ -16,7 +16,7 @@ func Add(database *sql.DB, args []string) error {
 	}
 
 	if args[0] == "--help" || args[0] == "-h" {
-		printAddHelp()
+		PrintHelp("add")
 		return nil
 	}
 
@@ -36,28 +36,4 @@ func Add(database *sql.DB, args []string) error {
 
 	fmt.Printf("Added task #%d: %s\n", id, taskName)
 	return nil
-}
-
-func printAddHelp() {
-	help := `Add a new task
-
-	Usage:
-	recur add "Task name"
-	recur add "Task name @(date time, frequency, end) #tag !project !priority *note"
-
-	Examples:
-	recur add "Buy groceries"
-	recur add "Team meeting @(2025-11-12 15:00) !Work"
-	recur add "Water plants @(today 9am, 1d) #chores"
-
-	Syntax (coming soon):
-	@(date time, frequency, end)  - Due date and recurrence
-	#tag                          - Add a tag
-	!project                      - Add to project
-	!priority                     - Set priority
-	*note                         - Add a note
-
-	For detailed syntax information, visit the documentation.`
-
-	fmt.Println(help)
 }

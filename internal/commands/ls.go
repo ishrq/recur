@@ -13,7 +13,7 @@ func List(database *sql.DB, args []string) error {
 	// Check for help flag
 	for _, arg := range args {
 		if arg == "--help" || arg == "-h" {
-			printListHelp()
+			PrintHelp("ls")
 			return nil
 		}
 	}
@@ -99,29 +99,4 @@ func formatDueDate(dueDate time.Time) string {
 	default:
 		return dueDate.Format("Jan 2, 15:04")
 	}
-}
-
-func printListHelp() {
-	help := `List tasks
-
-	Usage:
-	recur ls                    Show incomplete tasks
-	recur ls --all              Show all tasks including completed
-
-	Options:
-	-a, --all                   Show all tasks including completed
-	-h, --help                  Show this help message
-
-	More filtering options coming soon:
-	--today, --tomorrow, --overdue, --upcoming
-	--due, --from, --to
-	--tag, --project, --priority
-	--completed, --deleted
-	--query for search
-
-	Examples:
-	recur ls
-	recur ls --all`
-
-	fmt.Println(help)
 }

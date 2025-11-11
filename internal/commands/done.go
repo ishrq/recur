@@ -14,7 +14,7 @@ func Done(database *sql.DB, args []string) error {
 	}
 
 	if args[0] == "--help" || args[0] == "-h" {
-		printDoneHelp()
+		PrintHelp("done")
 		return nil
 	}
 
@@ -54,27 +54,4 @@ func Done(database *sql.DB, args []string) error {
 	}
 
 	return nil
-}
-
-func printDoneHelp() {
-	help := `Mark tasks as complete
-
-	Usage:
-	recur done <id>              Complete a task
-	recur done <id1> <id2> ...   Complete multiple tasks
-
-	Options:
-	-h, --help                   Show this help message
-
-	More options coming soon:
-	--tag, --project, --priority
-	--due, --query
-	--undo
-
-	Examples:
-	recur done 1
-	recur done 1 2 3
-	recur done 5`
-
-	fmt.Println(help)
 }

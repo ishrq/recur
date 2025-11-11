@@ -8,7 +8,7 @@ import (
 
 func Execute(db *sql.DB) {
 	if len(os.Args) < 2 {
-		printHelp()
+		PrintHelp("")
 		return
 	}
 
@@ -31,10 +31,14 @@ func Execute(db *sql.DB) {
 	case "mv":
 		fmt.Println("Move command - not yet implemented")
 	case "help", "--help", "-h":
-		printHelp()
+		if len(args) > 0 {
+			PrintHelp(args[0])
+		} else {
+			PrintHelp("")
+		}
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
-		printHelp()
+		PrintHelp("")
 		os.Exit(1)
 	}
 
@@ -42,24 +46,4 @@ func Execute(db *sql.DB) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func printHelp() {
-	help := `Recur - A CLI todo app with recurring tasks
-
-	Usage:
-	recur <command> [arguments]
-
-	Commands:
-	add     Add a new task
-	ls      List tasks
-	done    Complete task(s)
-	rm      Delete task(s)
-	cp      Copy task(s)
-	mv      Edit task(s)
-	help    Show this help message
-
-	Run 'recur <command> --help' for more information on a command.`
-
-	fmt.Println(help)
 }
