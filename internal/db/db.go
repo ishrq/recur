@@ -73,8 +73,8 @@ func createTables(db *sql.DB) error {
 
 func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	query := `
-		INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := db.Exec(query,
@@ -87,11 +87,93 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 		task.Priority,
 		task.Note,
 		task.LastTaskID,
-	)
+		)
 
 	if err != nil {
 		return 0, err
 	}
 
 	return result.LastInsertId()
+}
+
+func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
+	query := `
+	SELECT id, name, due_date, created_date, completed_date,
+	tag, project, priority, note, last_task_id
+	FROM tasks
+	WHERE deleted = 0
+	`
+
+	if !includeCompleted {
+		query += " AND completed_date IS NULL"
+	}
+
+	query += " ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date ASC, id ASC"
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, rows.Err()
+}
+
+func scanTask(rows *sql.Rows) (models.Task, error) {
+	var task models.Task
+	var dueDate, completedDate sql.NullTime
+	var tag, project, priority, note sql.NullString
+	var lastTaskID sql.NullInt64
+
+	err := rows.Scan(
+		&task.ID,
+		&task.Name,
+		&dueDate,
+		&task.CreatedDate,
+		&completedDate,
+		&tag,
+		&project,
+		&priority,
+		&note,
+		&lastTaskID,
+		)
+
+	if err != nil {
+		return task, err
+	}
+
+	// Convert nullable fields
+	if dueDate.Valid {
+		task.DueDate = &dueDate.Time
+	}
+	if completedDate.Valid {
+		task.CompletedDate = &completedDate.Time
+	}
+	if tag.Valid {
+		task.Tag = tag.String
+	}
+	if project.Valid {
+		task.Project = project.String
+	}
+	if priority.Valid {
+		task.Priority = priority.String
+	}
+	if note.Valid {
+		task.Note = note.String
+	}
+	if lastTaskID.Valid {
+		id := int(lastTaskID.Int64)
+		task.LastTaskID = &id
+	}
+
+	return task, nil
 }

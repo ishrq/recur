@@ -20,8 +20,8 @@ func Execute(db *sql.DB) {
 	switch command {
 	case "add":
 		err = Add(db, args)
-	case "ls":
-		fmt.Println("List command - not yet implemented")
+	case "ls", "list":
+		err = List(db, args)
 	case "done":
 		fmt.Println("Done command - not yet implemented")
 	case "rm":
