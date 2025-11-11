@@ -266,3 +266,27 @@ func MarkTaskDone(db *sql.DB, id int) error {
 
 	return nil
 }
+
+func DeleteTask(db *sql.DB, id int) error {
+	query := `
+	UPDATE tasks
+	SET deleted = 1
+	WHERE id = ? AND deleted = 0
+	`
+
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("task not found or already deleted")
+	}
+
+	return nil
+}

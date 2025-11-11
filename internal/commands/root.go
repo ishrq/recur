@@ -24,8 +24,8 @@ func Execute(db *sql.DB) {
 		err = List(db, args)
 	case "done":
 		err = Done(db, args)
-	case "rm":
-		fmt.Println("Remove command - not yet implemented")
+	case "rm", "remove":
+		err = Remove(db, args)
 	case "cp":
 		fmt.Println("Copy command - not yet implemented")
 	case "mv":
