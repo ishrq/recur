@@ -197,9 +197,12 @@ func parseDateTime(input string) *time.Time {
 		"2006-01-02 15:04",
 		"2006-01-02 3:04pm",
 		"2006-01-02 3:04 pm",
+		"2006-01-02 3pm",
+		"2006-01-02 3 pm",
 		"2006-01-02",
 		"Jan 2 15:04",
 		"Jan 2 3:04pm",
+		"Jan 2 3pm",
 		"Jan 2",
 		"Monday",
 		"Mon",
@@ -212,7 +215,7 @@ func parseDateTime(input string) *time.Time {
 				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
 			}
 			// If only date is specified (no time), set default time to 12:00
-			if t.Hour() == 0 && t.Minute() == 0 && !strings.Contains(input, ":") {
+			if t.Hour() == 0 && t.Minute() == 0 && !strings.Contains(input, ":") && !strings.Contains(strings.ToLower(input), "am") && !strings.Contains(strings.ToLower(input), "pm") {
 				t = time.Date(t.Year(), t.Month(), t.Day(), 12, 0, 0, 0, t.Location())
 			}
 			return &t
