@@ -24,6 +24,8 @@ func List(database *sql.DB, args []string) error {
 	var showOverdue bool
 	var showUpcoming bool
 	var dueDate string
+	var fromDate string
+	var toDate string
 	var tags []string
 	var projects []string
 	var priorities []string
@@ -44,6 +46,16 @@ func List(database *sql.DB, args []string) error {
 		case "--due", "-d":
 			if i+1 < len(args) {
 				dueDate = args[i+1]
+				i++
+			}
+		case "--from":
+			if i+1 < len(args) {
+				fromDate = args[i+1]
+				i++
+			}
+		case "--to":
+			if i+1 < len(args) {
+				toDate = args[i+1]
 				i++
 			}
 		case "--tag", "-t":
@@ -68,14 +80,15 @@ func List(database *sql.DB, args []string) error {
 	}
 
 	showDashboard := !showAll && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
-	dueDate == "" && len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
+	dueDate == "" && fromDate == "" && toDate == "" &&
+	len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
 
 	if showDashboard {
 		return displayDashboard(database)
 	}
 
 	tasks, err := getFilteredTasks(database, showAll, showToday, showTomorrow, showOverdue, showUpcoming,
-		dueDate, tags, projects, priorities)
+		dueDate, fromDate, toDate, tags, projects, priorities)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
@@ -164,7 +177,7 @@ func displayDashboard(database *sql.DB) error {
 }
 
 func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOverdue, showUpcoming bool,
-	dueDate string, tags, projects, priorities []string) ([]models.Task, error) {
+	dueDate, fromDate, toDate string, tags, projects, priorities []string) ([]models.Task, error) {
 
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -178,6 +191,13 @@ func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOv
 	// If specific date requested
 	if dueDate != "" {
 		allTasks, err = filterByDate(allTasks, dueDate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if fromDate != "" || toDate != "" {
+		allTasks, err = filterByDateRange(allTasks, fromDate, toDate)
 		if err != nil {
 			return nil, err
 		}
@@ -225,7 +245,6 @@ func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOv
 }
 
 func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
-	// Handle special keywords
 	now := time.Now()
 	var targetDate time.Time
 
@@ -235,7 +254,6 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 	case "tomorrow":
 		targetDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
 	case "none":
-		// Return tasks with no due date
 		var filtered []models.Task
 		for _, task := range tasks {
 			if task.DueDate == nil {
@@ -244,7 +262,6 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 		}
 		return filtered, nil
 	case "recurring":
-		// Return recurring tasks
 		var filtered []models.Task
 		for _, task := range tasks {
 			if task.RecurFrequency != "" {
@@ -253,30 +270,11 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 		}
 		return filtered, nil
 	default:
-		// Try parsing as date
-		formats := []string{
-			"2006-01-02",
-			"Jan 2",
-			"Jan 2 2006",
-			"Monday",
-			"Mon",
+		parsedDate, err := parseDate(dateStr)
+		if err != nil {
+			return nil, err
 		}
-
-		parsed := false
-		for _, format := range formats {
-			if t, err := time.Parse(format, dateStr); err == nil {
-				if t.Year() == 0 {
-					t = time.Date(now.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location())
-				}
-				targetDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-				parsed = true
-				break
-			}
-		}
-
-		if !parsed {
-			return nil, fmt.Errorf("invalid date format: %s", dateStr)
-		}
+		targetDate = parsedDate
 	}
 
 	// Filter tasks by date
@@ -293,6 +291,82 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 	}
 
 	return filtered, nil
+}
+
+func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]models.Task, error) {
+	now := time.Now()
+	var fromDate, toDate *time.Time
+
+	if fromDateStr != "" {
+		parsed, err := parseDate(fromDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid from date: %w", err)
+		}
+		fromDate = &parsed
+	}
+
+	if toDateStr != "" {
+		parsed, err := parseDate(toDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid to date: %w", err)
+		}
+		toDate = &parsed
+	}
+
+	var filtered []models.Task
+	for _, task := range tasks {
+		if task.DueDate == nil {
+			continue
+		}
+
+		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
+
+		// Check from date (inclusive)
+		if fromDate != nil && taskDate.Before(*fromDate) {
+			continue
+		}
+
+		// Check to date (inclusive)
+		if toDate != nil && taskDate.After(*toDate) {
+			continue
+		}
+
+		filtered = append(filtered, task)
+	}
+
+	return filtered, nil
+}
+
+func parseDate(dateStr string) (time.Time, error) {
+	now := time.Now()
+
+	switch strings.ToLower(dateStr) {
+	case "today":
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
+	case "tomorrow":
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1), nil
+	case "yesterday":
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -1), nil
+	}
+
+	formats := []string{
+		"2006-01-02",
+		"Jan 2",
+		"Jan 2 2006",
+		"Monday",
+		"Mon",
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, dateStr); err == nil {
+			if t.Year() == 0 {
+				t = time.Date(now.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location())
+			}
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location()), nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("invalid date format: %s", dateStr)
 }
 
 func filterByTags(tasks []models.Task, tags []string) []models.Task {
