@@ -81,8 +81,7 @@ func handleRecurringTask(database *sql.DB, task *models.Task) error {
 
 	// Check if end date is passed
 	if task.RecurEndDate != nil && nextDueDate.After(*task.RecurEndDate) {
-		fmt.Printf("  → Recurring task ended (past end date: next would be %s, end is %s)\n",
-			nextDueDate.Format("2006-01-02"), task.RecurEndDate.Format("2006-01-02"))
+		fmt.Printf("  → Recurring task ended (past end date)\n")
 		return nil
 	}
 
@@ -100,7 +99,7 @@ func handleRecurringTask(database *sql.DB, task *models.Task) error {
 		LastTaskID:     &task.ID,
 	}
 
-	newID, err := db.InsertTask(database, nextTask)
+	newID, err := CreateTask(database, nextTask)
 	if err != nil {
 		return fmt.Errorf("failed to insert next task: %w", err)
 	}

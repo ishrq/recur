@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/models"
 	"github.com/ishrq/recur/internal/parser"
 )
 
@@ -27,13 +28,25 @@ func Add(database *sql.DB, args []string) error {
 		return fmt.Errorf("failed to parse task: %w", err)
 	}
 
-	// Insert task
-	id, err := db.InsertTask(database, task)
+	id, err := CreateTask(database, task)
 	if err != nil {
-		return fmt.Errorf("failed to add task: %w", err)
+		return err
 	}
 
-	// Display confirmation
+	printTaskConfirmation(id, task)
+
+	return nil
+}
+
+func CreateTask(database *sql.DB, task *models.Task) (int64, error) {
+	id, err := db.InsertTask(database, task)
+	if err != nil {
+		return 0, fmt.Errorf("failed to add task: %w", err)
+	}
+	return id, nil
+}
+
+func printTaskConfirmation(id int64, task *models.Task) {
 	fmt.Printf("Added task #%d: %s\n", id, task.Name)
 
 	if task.DueDate != nil {
@@ -57,6 +70,4 @@ func Add(database *sql.DB, args []string) error {
 	if task.Note != "" {
 		fmt.Printf("  Note: %s\n", task.Note)
 	}
-
-	return nil
 }
