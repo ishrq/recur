@@ -51,6 +51,9 @@ func PrintHelp(command string) {
 			Usage: []string{
 				"recur ls                    Show task dashboard",
 				"recur ls --all              Show all tasks including completed",
+				"recur ls --tags             List all tags with counts",
+				"recur ls --projects         List all projects with counts",
+				"recur ls --priorities       List all priorities with counts",
 				"recur ls --today            Show tasks due today",
 				"recur ls --tomorrow         Show tasks due tomorrow",
 				"recur ls --overdue          Show overdue tasks",
@@ -64,6 +67,9 @@ func PrintHelp(command string) {
 			},
 			Options: []Option{
 				{"-a, --all", "Show all tasks including completed"},
+				{"--tags", "List all tags with task counts"},
+				{"--projects", "List all projects with task counts"},
+				{"--priorities", "List all priorities with task counts"},
 				{"--today", "Show tasks due today"},
 				{"--tomorrow", "Show tasks due tomorrow"},
 				{"--overdue", "Show overdue tasks"},
@@ -78,14 +84,12 @@ func PrintHelp(command string) {
 			},
 			Examples: []string{
 				"recur ls",
+				"recur ls --tags",
+				"recur ls --projects",
+				"recur ls --priorities",
 				"recur ls --today",
-				"recur ls --from 2025-11-15",
-				"recur ls --to 2025-12-31",
+				"recur ls --tag work",
 				"recur ls --from today --to 2025-11-20",
-				"recur ls --from yesterday --to tomorrow",
-				"recur ls --from Monday --to Friday",
-				"recur ls --from 2025-11-15 --tag work",
-				"recur ls --to tomorrow --project Home",
 			},
 			ComingSoon: []string{
 				"--completed, --deleted",

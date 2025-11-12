@@ -3,6 +3,7 @@ package commands
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +30,9 @@ func List(database *sql.DB, args []string) error {
 	var tags []string
 	var projects []string
 	var priorities []string
+	var listTags bool
+	var listProjects bool
+	var listPriorities bool
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -58,6 +62,12 @@ func List(database *sql.DB, args []string) error {
 				toDate = args[i+1]
 				i++
 			}
+		case "--tags":
+			listTags = true
+		case "--projects":
+			listProjects = true
+		case "--priorities":
+			listPriorities = true
 		case "--tag", "-t":
 			// Collect all following non-flag arguments as tags
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
@@ -79,9 +89,44 @@ func List(database *sql.DB, args []string) error {
 		}
 	}
 
+	// Check for invalid flag combinations
+	listingFlags := []bool{listTags, listProjects, listPriorities}
+	listingCount := 0
+	for _, flag := range listingFlags {
+		if flag {
+			listingCount++
+		}
+	}
+
+	if listingCount > 1 {
+		return fmt.Errorf("cannot combine --tags, --projects, and --priorities flags")
+	}
+
+	if listingCount > 0 {
+		// Check if combined with other flags
+		hasOtherFlags := showAll || showToday || showTomorrow || showOverdue || showUpcoming ||
+			dueDate != "" || fromDate != "" || toDate != "" ||
+			len(tags) > 0 || len(projects) > 0 || len(priorities) > 0
+
+		if hasOtherFlags {
+			return fmt.Errorf("--tags, --projects, and --priorities cannot be combined with other filters")
+		}
+
+		// Handle listing commands
+		if listTags {
+			return displayTags(database)
+		}
+		if listProjects {
+			return displayProjects(database)
+		}
+		if listPriorities {
+			return displayPriorities(database)
+		}
+	}
+
 	showDashboard := !showAll && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
-	dueDate == "" && fromDate == "" && toDate == "" &&
-	len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
+		dueDate == "" && fromDate == "" && toDate == "" &&
+		len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
 
 	if showDashboard {
 		return displayDashboard(database)
@@ -99,6 +144,145 @@ func List(database *sql.DB, args []string) error {
 	}
 
 	printTasks(tasks)
+	return nil
+}
+
+func displayTags(database *sql.DB) error {
+	tasks, err := db.GetTasks(database, false)
+	if err != nil {
+		return fmt.Errorf("failed to get tasks: %w", err)
+	}
+
+	// Count tags
+	tagCounts := make(map[string]int)
+	for _, task := range tasks {
+		if task.Tag != "" {
+			tagCounts[task.Tag]++
+		}
+	}
+
+	if len(tagCounts) == 0 {
+		fmt.Println("No tags found.")
+		return nil
+	}
+
+	// Sort tags alphabetically
+	tags := make([]string, 0, len(tagCounts))
+	for tag := range tagCounts {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+
+	// Display
+	fmt.Println()
+	fmt.Println("Tags:")
+	fmt.Println()
+	for _, tag := range tags {
+		fmt.Printf("  #%-20s (%d)\n", tag, tagCounts[tag])
+	}
+	fmt.Println()
+	fmt.Printf("Total: %d tags\n", len(tags))
+
+	return nil
+}
+
+func displayProjects(database *sql.DB) error {
+	tasks, err := db.GetTasks(database, false)
+	if err != nil {
+		return fmt.Errorf("failed to get tasks: %w", err)
+	}
+
+	// Count projects
+	projectCounts := make(map[string]int)
+	for _, task := range tasks {
+		if task.Project != "" {
+			projectCounts[task.Project]++
+		}
+	}
+
+	if len(projectCounts) == 0 {
+		fmt.Println("No projects found.")
+		return nil
+	}
+
+	// Sort projects alphabetically
+	projects := make([]string, 0, len(projectCounts))
+	for project := range projectCounts {
+		projects = append(projects, project)
+	}
+	sort.Strings(projects)
+
+	// Display
+	fmt.Println()
+	fmt.Println("Projects:")
+	fmt.Println()
+	for _, project := range projects {
+		fmt.Printf("  +%-20s (%d)\n", project, projectCounts[project])
+	}
+	fmt.Println()
+	fmt.Printf("Total: %d projects\n", len(projects))
+
+	return nil
+}
+
+func displayPriorities(database *sql.DB) error {
+	tasks, err := db.GetTasks(database, false)
+	if err != nil {
+		return fmt.Errorf("failed to get tasks: %w", err)
+	}
+
+	// Count priorities
+	priorityCounts := make(map[string]int)
+	for _, task := range tasks {
+		if task.Priority != "" {
+			priorityCounts[task.Priority]++
+		}
+	}
+
+	if len(priorityCounts) == 0 {
+		fmt.Println("No priorities found.")
+		return nil
+	}
+
+	// Sort priorities by a custom order (urgent, high, medium, low, then alphabetically)
+	priorities := make([]string, 0, len(priorityCounts))
+	for priority := range priorityCounts {
+		priorities = append(priorities, priority)
+	}
+
+	sort.Slice(priorities, func(i, j int) bool {
+		order := map[string]int{
+			"urgent": 1,
+			"high":   2,
+			"medium": 3,
+			"low":    4,
+		}
+
+		iOrder, iExists := order[strings.ToLower(priorities[i])]
+		jOrder, jExists := order[strings.ToLower(priorities[j])]
+
+		if iExists && jExists {
+			return iOrder < jOrder
+		}
+		if iExists {
+			return true
+		}
+		if jExists {
+			return false
+		}
+		return priorities[i] < priorities[j]
+	})
+
+	// Display
+	fmt.Println()
+	fmt.Println("Priorities:")
+	fmt.Println()
+	for _, priority := range priorities {
+		fmt.Printf("  !%-20s (%d)\n", priority, priorityCounts[priority])
+	}
+	fmt.Println()
+	fmt.Printf("Total: %d priorities\n", len(priorities))
+
 	return nil
 }
 
@@ -188,7 +372,6 @@ func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOv
 		return nil, err
 	}
 
-	// If specific date requested
 	if dueDate != "" {
 		allTasks, err = filterByDate(allTasks, dueDate)
 		if err != nil {
