@@ -24,6 +24,9 @@ func List(database *sql.DB, args []string) error {
 	var showOverdue bool
 	var showUpcoming bool
 	var dueDate string
+	var tags []string
+	var projects []string
+	var priorities []string
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -43,16 +46,36 @@ func List(database *sql.DB, args []string) error {
 				dueDate = args[i+1]
 				i++
 			}
+		case "--tag", "-t":
+			// Collect all following non-flag arguments as tags
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				tags = append(tags, args[i+1])
+				i++
+			}
+		case "--project", "-p":
+			// Collect all following non-flag arguments as projects
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				projects = append(projects, args[i+1])
+				i++
+			}
+		case "--priority", "-P":
+			// Collect all following non-flag arguments as priorities
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				priorities = append(priorities, args[i+1])
+				i++
+			}
 		}
 	}
 
-	showDashboard := !showAll && !showToday && !showTomorrow && !showOverdue && !showUpcoming && dueDate == ""
+	showDashboard := !showAll && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
+	dueDate == "" && len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
 
 	if showDashboard {
 		return displayDashboard(database)
 	}
 
-	tasks, err := getFilteredTasks(database, showAll, showToday, showTomorrow, showOverdue, showUpcoming, dueDate)
+	tasks, err := getFilteredTasks(database, showAll, showToday, showTomorrow, showOverdue, showUpcoming,
+		dueDate, tags, projects, priorities)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
@@ -87,7 +110,8 @@ func displayDashboard(database *sql.DB) error {
 			continue
 		}
 
-		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, task.DueDate.Location())
+		// Use the same location as 'today' for comparison
+		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
 
 		if taskDate.Before(today) {
 			overdue = append(overdue, task)
@@ -139,7 +163,9 @@ func displayDashboard(database *sql.DB) error {
 	return nil
 }
 
-func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOverdue, showUpcoming bool, dueDate string) ([]models.Task, error) {
+func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOverdue, showUpcoming bool,
+	dueDate string, tags, projects, priorities []string) ([]models.Task, error) {
+
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	nextWeek := today.AddDate(0, 0, 7)
@@ -149,30 +175,53 @@ func getFilteredTasks(database *sql.DB, showAll, showToday, showTomorrow, showOv
 		return nil, err
 	}
 
+	// If specific date requested
 	if dueDate != "" {
-		return filterByDate(allTasks, dueDate)
-	}
-
-	var filtered []models.Task
-	for _, task := range allTasks {
-		if task.DueDate == nil {
-			continue
-		}
-
-		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
-
-		if showOverdue && taskDate.Before(today) {
-			filtered = append(filtered, task)
-		} else if showToday && taskDate.Equal(today) {
-			filtered = append(filtered, task)
-		} else if showTomorrow && taskDate.Equal(today.AddDate(0, 0, 1)) {
-			filtered = append(filtered, task)
-		} else if showUpcoming && taskDate.After(today) && taskDate.Before(nextWeek.AddDate(0, 0, 1)) {
-			filtered = append(filtered, task)
+		allTasks, err = filterByDate(allTasks, dueDate)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return filtered, nil
+	// Apply date-based filters
+	if showOverdue || showToday || showTomorrow || showUpcoming {
+		var dateFiltered []models.Task
+		for _, task := range allTasks {
+			if task.DueDate == nil {
+				continue
+			}
+
+			taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
+
+			if showOverdue && taskDate.Before(today) {
+				dateFiltered = append(dateFiltered, task)
+			} else if showToday && taskDate.Equal(today) {
+				dateFiltered = append(dateFiltered, task)
+			} else if showTomorrow && taskDate.Equal(today.AddDate(0, 0, 1)) {
+				dateFiltered = append(dateFiltered, task)
+			} else if showUpcoming && taskDate.After(today) && taskDate.Before(nextWeek.AddDate(0, 0, 1)) {
+				dateFiltered = append(dateFiltered, task)
+			}
+		}
+		allTasks = dateFiltered
+	}
+
+	// Apply tag filter
+	if len(tags) > 0 {
+		allTasks = filterByTags(allTasks, tags)
+	}
+
+	// Apply project filter
+	if len(projects) > 0 {
+		allTasks = filterByProjects(allTasks, projects)
+	}
+
+	// Apply priority filter
+	if len(priorities) > 0 {
+		allTasks = filterByPriorities(allTasks, priorities)
+	}
+
+	return allTasks, nil
 }
 
 func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
@@ -244,6 +293,45 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 	}
 
 	return filtered, nil
+}
+
+func filterByTags(tasks []models.Task, tags []string) []models.Task {
+	var filtered []models.Task
+	for _, task := range tasks {
+		for _, tag := range tags {
+			if strings.EqualFold(task.Tag, tag) {
+				filtered = append(filtered, task)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
+func filterByProjects(tasks []models.Task, projects []string) []models.Task {
+	var filtered []models.Task
+	for _, task := range tasks {
+		for _, project := range projects {
+			if strings.EqualFold(task.Project, project) {
+				filtered = append(filtered, task)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
+func filterByPriorities(tasks []models.Task, priorities []string) []models.Task {
+	var filtered []models.Task
+	for _, task := range tasks {
+		for _, priority := range priorities {
+			if strings.EqualFold(task.Priority, priority) {
+				filtered = append(filtered, task)
+				break
+			}
+		}
+	}
+	return filtered
 }
 
 func printTasks(tasks []models.Task) {
