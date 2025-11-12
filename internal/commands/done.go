@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/models"
+	"github.com/ishrq/recur/internal/parser"
 )
 
 func Done(database *sql.DB, args []string) error {
@@ -40,6 +43,12 @@ func Done(database *sql.DB, args []string) error {
 			continue
 		}
 
+		if task.RecurFrequency != "" {
+			if err := handleRecurringTask(database, task); err != nil {
+				fmt.Printf("Warning: Failed to create next occurrence for task #%d: %v\n", id, err)
+			}
+		}
+
 		if err := db.MarkTaskDone(database, id); err != nil {
 			fmt.Printf("Warning: Failed to complete task #%d: %v\n", id, err)
 			continue
@@ -52,6 +61,51 @@ func Done(database *sql.DB, args []string) error {
 	if completed > 0 {
 		fmt.Printf("\n%d task(s) completed\n", completed)
 	}
+
+	return nil
+}
+
+func handleRecurringTask(database *sql.DB, task *models.Task) error {
+	// Parse the frequency
+	duration, err := parser.ParseFrequency(task.RecurFrequency)
+	if err != nil {
+		return fmt.Errorf("invalid frequency '%s': %w", task.RecurFrequency, err)
+	}
+
+	// Calculate next due date
+	if task.DueDate == nil {
+		return fmt.Errorf("recurring task must have a due date")
+	}
+
+	nextDueDate := task.DueDate.Add(duration)
+
+	// Check if end date is passed
+	if task.RecurEndDate != nil && nextDueDate.After(*task.RecurEndDate) {
+		fmt.Printf("  → Recurring task ended (past end date: next would be %s, end is %s)\n",
+			nextDueDate.Format("2006-01-02"), task.RecurEndDate.Format("2006-01-02"))
+		return nil
+	}
+
+	// Create the next occurrence
+	nextTask := &models.Task{
+		Name:           task.Name,
+		DueDate:        &nextDueDate,
+		CreatedDate:    time.Now(),
+		Tag:            task.Tag,
+		Project:        task.Project,
+		Priority:       task.Priority,
+		Note:           task.Note,
+		RecurFrequency: task.RecurFrequency,
+		RecurEndDate:   task.RecurEndDate,
+		LastTaskID:     &task.ID,
+	}
+
+	newID, err := db.InsertTask(database, nextTask)
+	if err != nil {
+		return fmt.Errorf("failed to insert next task: %w", err)
+	}
+
+	fmt.Printf("  → Created next occurrence #%d (due %s)\n", newID, nextDueDate.Format("Mon Jan 2, 15:04"))
 
 	return nil
 }
