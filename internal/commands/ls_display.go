@@ -11,7 +11,7 @@ import (
 	"github.com/ishrq/recur/internal/models"
 )
 
-func displayDashboard(database *sql.DB) error {
+func displayDashboard(database *sql.DB, showNote bool) error {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	tomorrow := today.AddDate(0, 0, 1)
@@ -48,31 +48,31 @@ func displayDashboard(database *sql.DB) error {
 	fmt.Println()
 	if len(overdue) > 0 {
 		fmt.Printf("═══ OVERDUE (%d) ═══\n", len(overdue))
-		printTasksCompact(overdue)
+		printTasksCompact(overdue, showNote)
 		fmt.Println()
 	}
 
 	if len(todayTasks) > 0 {
 		fmt.Printf("═══ TODAY (%d) ═══\n", len(todayTasks))
-		printTasksCompact(todayTasks)
+		printTasksCompact(todayTasks, showNote)
 		fmt.Println()
 	}
 
 	if len(tomorrowTasks) > 0 {
 		fmt.Printf("═══ TOMORROW (%d) ═══\n", len(tomorrowTasks))
-		printTasksCompact(tomorrowTasks)
+		printTasksCompact(tomorrowTasks, showNote)
 		fmt.Println()
 	}
 
 	if len(upcoming) > 0 {
 		fmt.Printf("═══ UPCOMING (%d) ═══\n", len(upcoming))
-		printTasksCompact(upcoming)
+		printTasksCompact(upcoming, showNote)
 		fmt.Println()
 	}
 
 	if len(noDueDate) > 0 {
 		fmt.Printf("═══ NO DUE DATE (%d) ═══\n", len(noDueDate))
-		printTasksCompact(noDueDate)
+		printTasksCompact(noDueDate, showNote)
 		fmt.Println()
 	}
 
@@ -214,13 +214,13 @@ func displayPriorities(database *sql.DB) error {
 	return nil
 }
 
-func printTasks(tasks []models.Task) {
+func printTasks(tasks []models.Task, showNote bool) {
 	fmt.Println()
-	printTasksCompact(tasks)
+	printTasksCompact(tasks, showNote)
 	fmt.Println()
 }
 
-func printTasksCompact(tasks []models.Task) {
+func printTasksCompact(tasks []models.Task, showNote bool) {
 	for _, task := range tasks {
 		// Format: #ID Task Name [due date]
 		line := fmt.Sprintf("#%-4d %s", task.ID, task.Name)
@@ -257,6 +257,10 @@ func printTasksCompact(tasks []models.Task) {
 		}
 
 		fmt.Println(line)
+
+		if showNote && task.Note != "" {
+			fmt.Printf("      Note: %s\n", task.Note)
+		}
 	}
 }
 

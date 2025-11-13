@@ -28,6 +28,7 @@ func List(database *sql.DB, args []string) error {
 	var listTags bool
 	var listProjects bool
 	var listPriorities bool
+	var showNote bool
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -63,6 +64,8 @@ func List(database *sql.DB, args []string) error {
 			listProjects = true
 		case "--priorities":
 			listPriorities = true
+		case "--note", "-n":
+			showNote = true
 		case "--tag", "-t":
 			// Collect all following non-flag arguments as tags
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
@@ -101,7 +104,7 @@ func List(database *sql.DB, args []string) error {
 		// Check if combined with other flags
 		hasOtherFlags := showAll || showToday || showTomorrow || showOverdue || showUpcoming ||
 		dueDate != "" || fromDate != "" || toDate != "" ||
-		len(tags) > 0 || len(projects) > 0 || len(priorities) > 0
+		len(tags) > 0 || len(projects) > 0 || len(priorities) > 0 || showNote
 
 		if hasOtherFlags {
 			return fmt.Errorf("--tags, --projects, and --priorities cannot be combined with other filters")
@@ -124,7 +127,7 @@ func List(database *sql.DB, args []string) error {
 	len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
 
 	if showDashboard {
-		return displayDashboard(database)
+		return displayDashboard(database, showNote)
 	}
 
 	tasks, err := getFilteredTasks(database, showAll, showToday, showTomorrow, showOverdue, showUpcoming,
@@ -138,6 +141,6 @@ func List(database *sql.DB, args []string) error {
 		return nil
 	}
 
-	printTasks(tasks)
+	printTasks(tasks, showNote)
 	return nil
 }
