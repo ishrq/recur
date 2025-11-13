@@ -13,7 +13,7 @@ import (
 
 func Remove(database *sql.DB, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("task ID required")
+		return fmt.Errorf("task ID or filter required")
 	}
 
 	if args[0] == "--help" || args[0] == "-h" {
@@ -22,19 +22,95 @@ func Remove(database *sql.DB, args []string) error {
 	}
 
 	var ids []int
-	for _, arg := range args {
-		id, err := strconv.Atoi(arg)
-		if err != nil {
-			return fmt.Errorf("invalid task ID: %s", arg)
+	var tags []string
+	var projects []string
+	var priorities []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--tag", "-t":
+			// Collect all following non-flag arguments as tags
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				tags = append(tags, args[i+1])
+				i++
+			}
+		case "--project", "-p":
+			// Collect all following non-flag arguments as projects
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				projects = append(projects, args[i+1])
+				i++
+			}
+		case "--priority", "-P":
+			// Collect all following non-flag arguments as priorities
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				priorities = append(priorities, args[i+1])
+				i++
+			}
+		default:
+			// Try to parse as ID
+			id, err := strconv.Atoi(arg)
+			if err != nil {
+				return fmt.Errorf("invalid task ID: %s", arg)
+			}
+			ids = append(ids, id)
 		}
-		ids = append(ids, id)
 	}
 
+	// Collect valid tasks to delete
 	var tasksToDelete []struct {
 		id   int
 		name string
 	}
 
+	if len(tags) > 0 || len(projects) > 0 || len(priorities) > 0 {
+		// Get all incomplete tasks
+		allTasks, err := db.GetTasks(database, false)
+		if err != nil {
+			return fmt.Errorf("failed to get tasks: %w", err)
+		}
+
+		// Apply filters
+		for _, task := range allTasks {
+			matched := false
+
+			if len(tags) > 0 {
+				for _, tag := range tags {
+					if strings.EqualFold(task.Tag, tag) {
+						matched = true
+						break
+					}
+				}
+			}
+
+			if len(projects) > 0 && !matched {
+				for _, project := range projects {
+					if strings.EqualFold(task.Project, project) {
+						matched = true
+						break
+					}
+				}
+			}
+
+			if len(priorities) > 0 && !matched {
+				for _, priority := range priorities {
+					if strings.EqualFold(task.Priority, priority) {
+						matched = true
+						break
+					}
+				}
+			}
+
+			if matched {
+				tasksToDelete = append(tasksToDelete, struct {
+					id   int
+					name string
+				}{id: task.ID, name: task.Name})
+			}
+		}
+	}
+
+	// If IDs provided, get those tasks
 	for _, id := range ids {
 		task, err := db.GetTaskByID(database, id)
 		if err != nil {
@@ -48,7 +124,7 @@ func Remove(database *sql.DB, args []string) error {
 	}
 
 	if len(tasksToDelete) == 0 {
-		return fmt.Errorf("no valid tasks to delete")
+		return fmt.Errorf("no tasks found matching criteria")
 	}
 
 	// Display tasks to be deleted

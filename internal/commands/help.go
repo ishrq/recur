@@ -140,16 +140,25 @@ func PrintHelp(command string) {
 			Usage: []string{
 				"recur rm <id>               Delete a task",
 				"recur rm <id1> <id2> ...    Delete multiple tasks",
+				"recur rm --tag <tag>        Delete tasks by tag",
+				"recur rm --project <proj>   Delete tasks by project",
+				"recur rm --priority <pri>   Delete tasks by priority",
 			},
 			Options: []Option{
+				{"-t, --tag <tag>", "Delete tasks with specific tag (can specify multiple)"},
+				{"-p, --project <proj>", "Delete tasks in specific project (can specify multiple)"},
+				{"-P, --priority <pri>", "Delete tasks with specific priority (can specify multiple)"},
 				{"-h, --help", "Show this help message"},
 			},
 			Examples: []string{
 				"recur rm 1",
 				"recur rm 1 2 3",
+				"recur rm --tag work",
+				"recur rm --project Home",
+				"recur rm --priority urgent high",
+				"recur rm --tag work --project Office",
 			},
 			ComingSoon: []string{
-				"--tag, --project, --priority",
 				"--due, --to, --from",
 				"--query",
 				"--undo",
