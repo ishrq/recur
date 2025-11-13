@@ -113,6 +113,33 @@ func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
 	return tasks, rows.Err()
 }
 
+func GetDeletedTasks(db *sql.DB) ([]models.Task, error) {
+	query := `
+		SELECT id, name, due_date, created_date, completed_date,
+		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+		FROM tasks
+		WHERE deleted = 1
+		ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date ASC, id ASC
+	`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, rows.Err()
+}
+
 func scanTask(rows *sql.Rows) (models.Task, error) {
 	var task models.Task
 	var dueDate, completedDate, recurEndDate sql.NullTime

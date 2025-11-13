@@ -10,23 +10,30 @@ import (
 	"github.com/ishrq/recur/internal/models"
 )
 
-func getFilteredTasks(database *sql.DB, showAll, showDone, showToday, showTomorrow, showOverdue, showUpcoming bool,
+func getFilteredTasks(database *sql.DB, showAll, showDone, showTrash, showToday, showTomorrow, showOverdue, showUpcoming bool,
 	dueDate, fromDate, toDate, query string, tags, projects, priorities []string) ([]models.Task, error) {
 
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	nextWeek := today.AddDate(0, 0, 7)
 
+	// Determine which tasks to fetch
 	var allTasks []models.Task
 	var err error
 
-	if showDone {
-		// Get only completed tasks
-		allTasks, err = db.GetTasks(database, true) // Get all tasks
+	if showTrash {
+		// Get only deleted
+		allTasks, err = db.GetDeletedTasks(database)
 		if err != nil {
 			return nil, err
 		}
-		// Filter to only completed tasks
+	} else if showDone {
+		// Get only completed
+		allTasks, err = db.GetTasks(database, true) // Get all including completed
+		if err != nil {
+			return nil, err
+		}
+		// Filter to only completed
 		var completedTasks []models.Task
 		for _, task := range allTasks {
 			if task.CompletedDate != nil {
