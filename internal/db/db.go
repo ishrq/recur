@@ -56,8 +56,8 @@ func createTables(db *sql.DB) error {
 
 func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	query := `
-		INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id, recur_frequency, recur_end_date)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id, recur_frequency, recur_end_date)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := db.Exec(query,
@@ -72,7 +72,7 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 		task.LastTaskID,
 		task.RecurFrequency,
 		task.RecurEndDate,
-	)
+		)
 
 	if err != nil {
 		return 0, err
@@ -83,10 +83,10 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 
 func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
 	query := `
-		SELECT id, name, due_date, created_date, completed_date,
-		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
-		FROM tasks
-		WHERE deleted = 0
+	SELECT id, name, due_date, created_date, completed_date,
+	tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+	FROM tasks
+	WHERE deleted = 0
 	`
 
 	if !includeCompleted {
@@ -115,11 +115,11 @@ func GetTasks(db *sql.DB, includeCompleted bool) ([]models.Task, error) {
 
 func GetDeletedTasks(db *sql.DB) ([]models.Task, error) {
 	query := `
-		SELECT id, name, due_date, created_date, completed_date,
-		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
-		FROM tasks
-		WHERE deleted = 1
-		ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date ASC, id ASC
+	SELECT id, name, due_date, created_date, completed_date,
+	tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+	FROM tasks
+	WHERE deleted = 1
+	ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date ASC, id ASC
 	`
 
 	rows, err := db.Query(query)
@@ -159,7 +159,7 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 		&lastTaskID,
 		&recurFrequency,
 		&recurEndDate,
-	)
+		)
 
 	if err != nil {
 		return task, err
@@ -200,10 +200,10 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 
 func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 	query := `
-		SELECT id, name, due_date, created_date, completed_date,
-		       tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
-		FROM tasks
-		WHERE id = ? AND deleted = 0
+	SELECT id, name, due_date, created_date, completed_date,
+	tag, project, priority, note, last_task_id, recur_frequency, recur_end_date
+	FROM tasks
+	WHERE id = ? AND deleted = 0
 	`
 
 	row := db.QueryRow(query, id)
@@ -226,7 +226,7 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 		&lastTaskID,
 		&recurFrequency,
 		&recurEndDate,
-	)
+		)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task not found")
@@ -318,9 +318,9 @@ func DeleteTask(db *sql.DB, id int) error {
 
 func UpdateTask(db *sql.DB, task *models.Task) error {
 	query := `
-		UPDATE tasks
-		SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?, recur_frequency = ?, recur_end_date = ?
-		WHERE id = ? AND deleted = 0
+	UPDATE tasks
+	SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?, recur_frequency = ?, recur_end_date = ?
+	WHERE id = ? AND deleted = 0
 	`
 
 	result, err := db.Exec(query,
@@ -334,7 +334,7 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 		task.RecurFrequency,
 		task.RecurEndDate,
 		task.ID,
-	)
+		)
 
 	if err != nil {
 		return err
@@ -350,4 +350,37 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 	}
 
 	return nil
+}
+
+func PermanentlyDeleteTask(db *sql.DB, id int) error {
+	query := `DELETE FROM tasks WHERE id = ?`
+
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("task not found")
+	}
+
+	return nil
+}
+
+func PurgeAllTasks(db *sql.DB) error {
+	query := `DELETE FROM tasks`
+	_, err := db.Exec(query)
+	return err
+}
+
+func GetAllTasksCount(db *sql.DB) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM tasks`
+	err := db.QueryRow(query).Scan(&count)
+	return count, err
 }
