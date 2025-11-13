@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/ishrq/recur/internal/db"
 )
@@ -27,20 +30,57 @@ func Remove(database *sql.DB, args []string) error {
 		ids = append(ids, id)
 	}
 
-	deleted := 0
+	var tasksToDelete []struct {
+		id   int
+		name string
+	}
+
 	for _, id := range ids {
 		task, err := db.GetTaskByID(database, id)
 		if err != nil {
 			fmt.Printf("Warning: Task #%d not found\n", id)
 			continue
 		}
+		tasksToDelete = append(tasksToDelete, struct {
+			id   int
+			name string
+		}{id: id, name: task.Name})
+	}
 
-		if err := db.DeleteTask(database, id); err != nil {
-			fmt.Printf("Warning: Failed to delete task #%d: %v\n", id, err)
+	if len(tasksToDelete) == 0 {
+		return fmt.Errorf("no valid tasks to delete")
+	}
+
+	// Display tasks to be deleted
+	fmt.Printf("\nFound %d task(s) to delete:\n", len(tasksToDelete))
+	for _, t := range tasksToDelete {
+		fmt.Printf("#%-4d %s\n", t.id, t.name)
+	}
+	fmt.Println()
+
+	// Ask for confirmation
+	fmt.Printf("Delete these %d task(s)? (y/n): ", len(tasksToDelete))
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	if response != "y" && response != "yes" {
+		fmt.Println("Deletion cancelled.")
+		return nil
+	}
+
+	// Delete tasks
+	deleted := 0
+	for _, t := range tasksToDelete {
+		if err := db.DeleteTask(database, t.id); err != nil {
+			fmt.Printf("Warning: Failed to delete task #%d: %v\n", t.id, err)
 			continue
 		}
 
-		fmt.Printf("✗ Deleted #%d: %s\n", id, task.Name)
+		fmt.Printf("✗ Deleted #%d: %s\n", t.id, t.name)
 		deleted++
 	}
 
