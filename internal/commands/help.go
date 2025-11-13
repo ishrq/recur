@@ -150,9 +150,10 @@ func PrintHelp(command string) {
 			},
 			ComingSoon: []string{
 				"--tag, --project, --priority",
-				"--due, --query",
+				"--due, --to, --from",
+				"--query",
 				"--undo",
-				"--completed, --all, --purge",
+				"--done, --trash, --all, --purge",
 			},
 		},
 		"cp": {
