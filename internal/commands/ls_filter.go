@@ -11,7 +11,7 @@ import (
 )
 
 func getFilteredTasks(database *sql.DB, showAll, showDone, showToday, showTomorrow, showOverdue, showUpcoming bool,
-	dueDate, fromDate, toDate string, tags, projects, priorities []string) ([]models.Task, error) {
+	dueDate, fromDate, toDate, query string, tags, projects, priorities []string) ([]models.Task, error) {
 
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -76,6 +76,10 @@ func getFilteredTasks(database *sql.DB, showAll, showDone, showToday, showTomorr
 			}
 		}
 		allTasks = dateFiltered
+	}
+
+	if query != "" {
+		allTasks = filterByQuery(allTasks, query)
 	}
 
 	if len(tags) > 0 {
@@ -251,5 +255,21 @@ func filterByPriorities(tasks []models.Task, priorities []string) []models.Task 
 			}
 		}
 	}
+	return filtered
+}
+
+func filterByQuery(tasks []models.Task, query string) []models.Task {
+	query = strings.ToLower(query)
+	var filtered []models.Task
+
+	for _, task := range tasks {
+		if strings.Contains(strings.ToLower(task.Name), query) ||
+		strings.Contains(strings.ToLower(task.Tag), query) ||
+		strings.Contains(strings.ToLower(task.Project), query) ||
+		strings.Contains(strings.ToLower(task.Note), query) {
+			filtered = append(filtered, task)
+		}
+	}
+
 	return filtered
 }
