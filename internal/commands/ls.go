@@ -15,6 +15,7 @@ func List(database *sql.DB, args []string) error {
 	}
 
 	var showAll bool
+	var showDone bool
 	var showToday bool
 	var showTomorrow bool
 	var showOverdue bool
@@ -35,6 +36,8 @@ func List(database *sql.DB, args []string) error {
 		switch arg {
 		case "--all", "-a":
 			showAll = true
+		case "--done", "-x":
+			showDone = true
 		case "--today":
 			showToday = true
 		case "--tomorrow":
@@ -122,15 +125,15 @@ func List(database *sql.DB, args []string) error {
 		}
 	}
 
-	showDashboard := !showAll && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
-	dueDate == "" && fromDate == "" && toDate == "" &&
-	len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
+	showDashboard := !showAll && !showDone && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
+		dueDate == "" && fromDate == "" && toDate == "" &&
+		len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
 
 	if showDashboard {
 		return displayDashboard(database, showNote)
 	}
 
-	tasks, err := getFilteredTasks(database, showAll, showToday, showTomorrow, showOverdue, showUpcoming,
+	tasks, err := getFilteredTasks(database, showAll, showDone, showToday, showTomorrow, showOverdue, showUpcoming,
 		dueDate, fromDate, toDate, tags, projects, priorities)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
