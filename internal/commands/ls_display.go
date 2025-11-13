@@ -225,6 +225,10 @@ func printTasksCompact(tasks []models.Task, showNote bool) {
 		// Format: #ID Task Name [due date]
 		line := fmt.Sprintf("#%-4d %s", task.ID, task.Name)
 
+		if task.Note != "" {
+			line += "*"
+		}
+
 		if task.DueDate != nil {
 			dueStr := formatDueDate(*task.DueDate)
 			line += fmt.Sprintf(" [%s]", dueStr)
