@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/filter"
+	"github.com/ishrq/recur/internal/models"
 )
 
 func Remove(database *sql.DB, args []string) error {
@@ -22,13 +24,12 @@ func Remove(database *sql.DB, args []string) error {
 	}
 
 	var ids []int
-	var tags []string
-	var projects []string
-	var priorities []string
 	var removeAll bool
 	var removeDone bool
 	var removeTrash bool
 	var purge bool
+
+	filters := filter.Filters{}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -41,22 +42,47 @@ func Remove(database *sql.DB, args []string) error {
 			removeTrash = true
 		case "--purge":
 			purge = true
+		case "--today":
+			filters.Today = true
+		case "--tomorrow":
+			filters.Tomorrow = true
+		case "--overdue":
+			filters.Overdue = true
+		case "--upcoming":
+			filters.Upcoming = true
+		case "--due", "-d":
+			if i+1 < len(args) {
+				filters.DueDate = args[i+1]
+				i++
+			}
+		case "--from":
+			if i+1 < len(args) {
+				filters.FromDate = args[i+1]
+				i++
+			}
+		case "--to":
+			if i+1 < len(args) {
+				filters.ToDate = args[i+1]
+				i++
+			}
+		case "--query", "-q":
+			if i+1 < len(args) {
+				filters.Query = args[i+1]
+				i++
+			}
 		case "--tag", "-t":
-			// Collect all following non-flag arguments as tags
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				tags = append(tags, args[i+1])
+				filters.Tags = append(filters.Tags, args[i+1])
 				i++
 			}
 		case "--project", "-p":
-			// Collect all following non-flag arguments as projects
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				projects = append(projects, args[i+1])
+				filters.Projects = append(filters.Projects, args[i+1])
 				i++
 			}
 		case "--priority", "-P":
-			// Collect all following non-flag arguments as priorities
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				priorities = append(priorities, args[i+1])
+				filters.Priorities = append(filters.Priorities, args[i+1])
 				i++
 			}
 		default:
@@ -118,110 +144,60 @@ func Remove(database *sql.DB, args []string) error {
 		return nil
 	}
 
-	// Collect valid tasks to delete
-	var tasksToDelete []struct {
-		id   int
-		name string
-	}
+	// Collect initial task set
+	var tasksToDelete []*models.Task
 	permanentDelete := false
+	var initialTasks []models.Task
+	var err error
 
 	if removeTrash {
 		permanentDelete = true
-		deletedTasks, err := db.GetDeletedTasks(database)
+		initialTasks, err = db.GetDeletedTasks(database)
 		if err != nil {
 			return fmt.Errorf("failed to get deleted tasks: %w", err)
 		}
-
-		for _, task := range deletedTasks {
-			tasksToDelete = append(tasksToDelete, struct {
-				id   int
-				name string
-			}{id: task.ID, name: task.Name})
-		}
 	} else if removeAll {
-		allTasks, err := db.GetTasks(database, false)
+		initialTasks, err = db.GetTasks(database, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-
-		for _, task := range allTasks {
-			tasksToDelete = append(tasksToDelete, struct {
-				id   int
-				name string
-			}{id: task.ID, name: task.Name})
 		}
 	} else if removeDone {
 		allTasks, err := db.GetTasks(database, true)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}
-
 		for _, task := range allTasks {
 			if task.CompletedDate != nil {
-				tasksToDelete = append(tasksToDelete, struct {
-					id   int
-					name string
-				}{id: task.ID, name: task.Name})
+				initialTasks = append(initialTasks, task)
 			}
 		}
-	} else if len(tags) > 0 || len(projects) > 0 || len(priorities) > 0 {
-		// Handle filters
-		allTasks, err := db.GetTasks(database, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-
-		// Apply filters
-		for _, task := range allTasks {
-			matched := false
-
-			if len(tags) > 0 {
-				for _, tag := range tags {
-					if strings.EqualFold(task.Tag, tag) {
-						matched = true
-						break
-					}
-				}
-			}
-
-			if len(projects) > 0 && !matched {
-				for _, project := range projects {
-					if strings.EqualFold(task.Project, project) {
-						matched = true
-						break
-					}
-				}
-			}
-
-			if len(priorities) > 0 && !matched {
-				for _, priority := range priorities {
-					if strings.EqualFold(task.Priority, priority) {
-						matched = true
-						break
-					}
-				}
-			}
-
-			if matched {
-				tasksToDelete = append(tasksToDelete, struct {
-					id   int
-					name string
-				}{id: task.ID, name: task.Name})
-			}
-		}
-	} else {
-		// Handle IDs
+	} else if len(ids) > 0 {
+		// Get tasks by IDs
 		for _, id := range ids {
 			task, err := db.GetTaskByID(database, id)
 			if err != nil {
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
-			tasksToDelete = append(tasksToDelete, struct {
-				id   int
-				name string
-			}{id: id, name: task.Name})
+			initialTasks = append(initialTasks, *task)
 		}
+	} else {
+		// Get all incomplete tasks for filtering
+		initialTasks, err = db.GetTasks(database, false)
+		if err != nil {
+			return fmt.Errorf("failed to get tasks: %w", err)
+		}
+	}
+
+	// Apply filters
+	initialTasks, err = filter.ApplyFilters(initialTasks, filters)
+	if err != nil {
+		return err
+	}
+
+	// Convert to tasksToDelete
+	for i := range initialTasks {
+		tasksToDelete = append(tasksToDelete, &initialTasks[i])
 	}
 
 	if len(tasksToDelete) == 0 {
@@ -237,7 +213,7 @@ func Remove(database *sql.DB, args []string) error {
 	}
 	fmt.Printf("Found %d task(s) to delete:\n", len(tasksToDelete))
 	for _, t := range tasksToDelete {
-		fmt.Printf("#%-4d %s\n", t.id, t.name)
+		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
 	}
 	fmt.Println()
 
@@ -265,17 +241,17 @@ func Remove(database *sql.DB, args []string) error {
 	for _, t := range tasksToDelete {
 		var err error
 		if permanentDelete {
-			err = db.PermanentlyDeleteTask(database, t.id)
+			err = db.PermanentlyDeleteTask(database, t.ID)
 		} else {
-			err = db.DeleteTask(database, t.id)
+			err = db.DeleteTask(database, t.ID)
 		}
 
 		if err != nil {
-			fmt.Printf("Warning: Failed to delete task #%d: %v\n", t.id, err)
+			fmt.Printf("Warning: Failed to delete task #%d: %v\n", t.ID, err)
 			continue
 		}
 
-		fmt.Printf("✗ Deleted #%d: %s\n", t.id, t.name)
+		fmt.Printf("✗ Deleted #%d: %s\n", t.ID, t.Name)
 		deleted++
 	}
 

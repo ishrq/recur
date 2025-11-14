@@ -1,19 +1,23 @@
 package commands
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/filter"
 	"github.com/ishrq/recur/internal/models"
 	"github.com/ishrq/recur/internal/parser"
 )
 
 func Done(database *sql.DB, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("task ID required")
+		return fmt.Errorf("task ID or filter required")
 	}
 
 	if args[0] == "--help" || args[0] == "-h" {
@@ -22,39 +26,138 @@ func Done(database *sql.DB, args []string) error {
 	}
 
 	var ids []int
-	for _, arg := range args {
-		id, err := strconv.Atoi(arg)
-		if err != nil {
-			return fmt.Errorf("invalid task ID: %s", arg)
+	filters := filter.Filters{}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--today":
+			filters.Today = true
+		case "--tomorrow":
+			filters.Tomorrow = true
+		case "--overdue":
+			filters.Overdue = true
+		case "--upcoming":
+			filters.Upcoming = true
+		case "--due", "-d":
+			if i+1 < len(args) {
+				filters.DueDate = args[i+1]
+				i++
+			}
+		case "--from":
+			if i+1 < len(args) {
+				filters.FromDate = args[i+1]
+				i++
+			}
+		case "--to":
+			if i+1 < len(args) {
+				filters.ToDate = args[i+1]
+				i++
+			}
+		case "--query", "-q":
+			if i+1 < len(args) {
+				filters.Query = args[i+1]
+				i++
+			}
+		case "--tag", "-t":
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				filters.Tags = append(filters.Tags, args[i+1])
+				i++
+			}
+		case "--project", "-p":
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				filters.Projects = append(filters.Projects, args[i+1])
+				i++
+			}
+		case "--priority", "-P":
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				filters.Priorities = append(filters.Priorities, args[i+1])
+				i++
+			}
+		default:
+			// Try to parse as ID
+			id, err := strconv.Atoi(arg)
+			if err != nil {
+				return fmt.Errorf("invalid task ID: %s", arg)
+			}
+			ids = append(ids, id)
 		}
-		ids = append(ids, id)
 	}
 
-	completed := 0
-	for _, id := range ids {
-		task, err := db.GetTaskByID(database, id)
+	// Collect tasks to mark as done
+	var tasksToComplete []models.Task
+	var err error
+
+	if len(ids) > 0 {
+		// Get tasks by IDs
+		for _, id := range ids {
+			task, err := db.GetTaskByID(database, id)
+			if err != nil {
+				fmt.Printf("Warning: Task #%d not found\n", id)
+				continue
+			}
+			if task.CompletedDate != nil {
+				fmt.Printf("Task #%d already completed\n", id)
+				continue
+			}
+			tasksToComplete = append(tasksToComplete, *task)
+		}
+	} else {
+		// Get all incomplete tasks for filtering
+		tasksToComplete, err = db.GetTasks(database, false)
 		if err != nil {
-			fmt.Printf("Warning: Task #%d not found\n", id)
-			continue
+			return fmt.Errorf("failed to get tasks: %w", err)
 		}
 
-		if task.CompletedDate != nil {
-			fmt.Printf("Task #%d already completed\n", id)
-			continue
+		// Apply filters
+		tasksToComplete, err = filter.ApplyFilters(tasksToComplete, filters)
+		if err != nil {
+			return err
 		}
+	}
 
+	if len(tasksToComplete) == 0 {
+		return fmt.Errorf("no tasks found matching criteria")
+	}
+
+	// Display tasks to be completed
+	fmt.Printf("\nFound %d task(s) to complete:\n", len(tasksToComplete))
+	for _, t := range tasksToComplete {
+		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
+	}
+	fmt.Println()
+
+	// Ask for confirmation
+	fmt.Printf("Mark these %d task(s) as done? (y/n): ", len(tasksToComplete))
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	if response != "y" && response != "yes" {
+		fmt.Println("Operation cancelled.")
+		return nil
+	}
+
+	// Mark tasks as done
+	completed := 0
+	for _, task := range tasksToComplete {
+		// Check if this is a recurring task
 		if task.RecurFrequency != "" {
-			if err := handleRecurringTask(database, task); err != nil {
-				fmt.Printf("Warning: Failed to create next occurrence for task #%d: %v\n", id, err)
+			if err := handleRecurringTask(database, &task); err != nil {
+				fmt.Printf("Warning: Failed to create next occurrence for task #%d: %v\n", task.ID, err)
 			}
 		}
 
-		if err := db.MarkTaskDone(database, id); err != nil {
-			fmt.Printf("Warning: Failed to complete task #%d: %v\n", id, err)
+		// Mark current task as done
+		if err := db.MarkTaskDone(database, task.ID); err != nil {
+			fmt.Printf("Warning: Failed to complete task #%d: %v\n", task.ID, err)
 			continue
 		}
 
-		fmt.Printf("✓ Completed #%d: %s\n", id, task.Name)
+		fmt.Printf("✓ Completed #%d: %s\n", task.ID, task.Name)
 		completed++
 	}
 
@@ -79,7 +182,7 @@ func handleRecurringTask(database *sql.DB, task *models.Task) error {
 
 	nextDueDate := task.DueDate.Add(duration)
 
-	// Check if end date is passed
+	// Check if we've passed the end date
 	if task.RecurEndDate != nil && nextDueDate.After(*task.RecurEndDate) {
 		fmt.Printf("  → Recurring task ended (past end date)\n")
 		return nil
