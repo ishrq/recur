@@ -1,107 +1,87 @@
-package commands
+package filter
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/models"
 )
 
-func getFilteredTasks(database *sql.DB, showAll, showDone, showTrash, showToday, showTomorrow, showOverdue, showUpcoming bool,
-	dueDate, fromDate, toDate, query string, tags, projects, priorities []string) ([]models.Task, error) {
+type Filters struct {
+	Today      bool
+	Tomorrow   bool
+	Overdue    bool
+	Upcoming   bool
+	DueDate    string
+	FromDate   string
+	ToDate     string
+	Query      string
+	Tags       []string
+	Projects   []string
+	Priorities []string
+}
 
+func ApplyFilters(tasks []models.Task, filters Filters) ([]models.Task, error) {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	nextWeek := today.AddDate(0, 0, 7)
 
-	// Determine which tasks to fetch
-	var allTasks []models.Task
-	var err error
-
-	if showTrash {
-		// Get only deleted
-		allTasks, err = db.GetDeletedTasks(database)
+	if filters.DueDate != "" {
+		filtered, err := filterByDate(tasks, filters.DueDate)
 		if err != nil {
 			return nil, err
 		}
-	} else if showDone {
-		// Get only completed
-		allTasks, err = db.GetTasks(database, true) // Get all including completed
-		if err != nil {
-			return nil, err
-		}
-		// Filter to only completed
-		var completedTasks []models.Task
-		for _, task := range allTasks {
-			if task.CompletedDate != nil {
-				completedTasks = append(completedTasks, task)
-			}
-		}
-		allTasks = completedTasks
-	} else {
-		// Get incomplete tasks (or all if showAll is true)
-		allTasks, err = db.GetTasks(database, showAll)
-		if err != nil {
-			return nil, err
-		}
+		tasks = filtered
 	}
 
-	if dueDate != "" {
-		allTasks, err = filterByDate(allTasks, dueDate)
+	if filters.FromDate != "" || filters.ToDate != "" {
+		filtered, err := filterByDateRange(tasks, filters.FromDate, filters.ToDate)
 		if err != nil {
 			return nil, err
 		}
+		tasks = filtered
 	}
 
-	if fromDate != "" || toDate != "" {
-		allTasks, err = filterByDateRange(allTasks, fromDate, toDate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if showOverdue || showToday || showTomorrow || showUpcoming {
+	if filters.Overdue || filters.Today || filters.Tomorrow || filters.Upcoming {
 		var dateFiltered []models.Task
-		for _, task := range allTasks {
+		for _, task := range tasks {
 			if task.DueDate == nil {
 				continue
 			}
 
 			taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
 
-			if showOverdue && taskDate.Before(today) {
+			if filters.Overdue && taskDate.Before(today) {
 				dateFiltered = append(dateFiltered, task)
-			} else if showToday && taskDate.Equal(today) {
+			} else if filters.Today && taskDate.Equal(today) {
 				dateFiltered = append(dateFiltered, task)
-			} else if showTomorrow && taskDate.Equal(today.AddDate(0, 0, 1)) {
+			} else if filters.Tomorrow && taskDate.Equal(today.AddDate(0, 0, 1)) {
 				dateFiltered = append(dateFiltered, task)
-			} else if showUpcoming && taskDate.After(today) && taskDate.Before(nextWeek.AddDate(0, 0, 1)) {
+			} else if filters.Upcoming && taskDate.After(today) && taskDate.Before(nextWeek.AddDate(0, 0, 1)) {
 				dateFiltered = append(dateFiltered, task)
 			}
 		}
-		allTasks = dateFiltered
+		tasks = dateFiltered
 	}
 
-	if query != "" {
-		allTasks = filterByQuery(allTasks, query)
+	if filters.Query != "" {
+		tasks = filterByQuery(tasks, filters.Query)
 	}
 
-	if len(tags) > 0 {
-		allTasks = filterByTags(allTasks, tags)
+	if len(filters.Tags) > 0 {
+		tasks = filterByTags(tasks, filters.Tags)
 	}
 
-	if len(projects) > 0 {
-		allTasks = filterByProjects(allTasks, projects)
+	if len(filters.Projects) > 0 {
+		tasks = filterByProjects(tasks, filters.Projects)
 	}
 
-	if len(priorities) > 0 {
-		allTasks = filterByPriorities(allTasks, priorities)
+	if len(filters.Priorities) > 0 {
+		tasks = filterByPriorities(tasks, filters.Priorities)
 	}
 
-	return allTasks, nil
+	return tasks, nil
 }
 
 func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
@@ -130,7 +110,7 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 		}
 		return filtered, nil
 	default:
-		parsedDate, err := parseDate(dateStr)
+		parsedDate, err := ParseDate(dateStr)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +137,7 @@ func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]mo
 	var fromDate, toDate *time.Time
 
 	if fromDateStr != "" {
-		parsed, err := parseDate(fromDateStr)
+		parsed, err := ParseDate(fromDateStr)
 		if err != nil {
 			return nil, fmt.Errorf("invalid from date: %w", err)
 		}
@@ -165,7 +145,7 @@ func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]mo
 	}
 
 	if toDateStr != "" {
-		parsed, err := parseDate(toDateStr)
+		parsed, err := ParseDate(toDateStr)
 		if err != nil {
 			return nil, fmt.Errorf("invalid to date: %w", err)
 		}
@@ -194,7 +174,7 @@ func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]mo
 	return filtered, nil
 }
 
-func parseDate(dateStr string) (time.Time, error) {
+func ParseDate(dateStr string) (time.Time, error) {
 	now := time.Now()
 
 	switch strings.ToLower(dateStr) {
@@ -224,6 +204,22 @@ func parseDate(dateStr string) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("invalid date format: %s", dateStr)
+}
+
+func filterByQuery(tasks []models.Task, query string) []models.Task {
+	query = strings.ToLower(query)
+	var filtered []models.Task
+
+	for _, task := range tasks {
+		if strings.Contains(strings.ToLower(task.Name), query) ||
+		strings.Contains(strings.ToLower(task.Tag), query) ||
+		strings.Contains(strings.ToLower(task.Project), query) ||
+		strings.Contains(strings.ToLower(task.Note), query) {
+			filtered = append(filtered, task)
+		}
+	}
+
+	return filtered
 }
 
 func filterByTags(tasks []models.Task, tags []string) []models.Task {
@@ -262,21 +258,5 @@ func filterByPriorities(tasks []models.Task, priorities []string) []models.Task 
 			}
 		}
 	}
-	return filtered
-}
-
-func filterByQuery(tasks []models.Task, query string) []models.Task {
-	query = strings.ToLower(query)
-	var filtered []models.Task
-
-	for _, task := range tasks {
-		if strings.Contains(strings.ToLower(task.Name), query) ||
-		strings.Contains(strings.ToLower(task.Tag), query) ||
-		strings.Contains(strings.ToLower(task.Project), query) ||
-		strings.Contains(strings.ToLower(task.Note), query) {
-			filtered = append(filtered, task)
-		}
-	}
-
 	return filtered
 }

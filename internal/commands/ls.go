@@ -4,6 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/filter"
+	"github.com/ishrq/recur/internal/models"
 )
 
 func List(database *sql.DB, args []string) error {
@@ -17,21 +21,12 @@ func List(database *sql.DB, args []string) error {
 	var showAll bool
 	var showDone bool
 	var showTrash bool
-	var showToday bool
-	var showTomorrow bool
-	var showOverdue bool
-	var showUpcoming bool
-	var dueDate string
-	var fromDate string
-	var toDate string
-	var query string
-	var tags []string
-	var projects []string
-	var priorities []string
+	var showNote bool
 	var listTags bool
 	var listProjects bool
 	var listPriorities bool
-	var showNote bool
+
+	filters := filter.Filters{}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -43,31 +38,31 @@ func List(database *sql.DB, args []string) error {
 		case "--trash":
 			showTrash = true
 		case "--today":
-			showToday = true
+			filters.Today = true
 		case "--tomorrow":
-			showTomorrow = true
+			filters.Tomorrow = true
 		case "--overdue":
-			showOverdue = true
+			filters.Overdue = true
 		case "--upcoming":
-			showUpcoming = true
+			filters.Upcoming = true
 		case "--due", "-d":
 			if i+1 < len(args) {
-				dueDate = args[i+1]
+				filters.DueDate = args[i+1]
 				i++
 			}
 		case "--from":
 			if i+1 < len(args) {
-				fromDate = args[i+1]
+				filters.FromDate = args[i+1]
 				i++
 			}
 		case "--to":
 			if i+1 < len(args) {
-				toDate = args[i+1]
+				filters.ToDate = args[i+1]
 				i++
 			}
 		case "--query", "-q":
 			if i+1 < len(args) {
-				query = args[i+1]
+				filters.Query = args[i+1]
 				i++
 			}
 		case "--tags":
@@ -79,21 +74,18 @@ func List(database *sql.DB, args []string) error {
 		case "--note", "-n":
 			showNote = true
 		case "--tag", "-t":
-			// Collect all following non-flag arguments as tags
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				tags = append(tags, args[i+1])
+				filters.Tags = append(filters.Tags, args[i+1])
 				i++
 			}
 		case "--project", "-p":
-			// Collect all following non-flag arguments as projects
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				projects = append(projects, args[i+1])
+				filters.Projects = append(filters.Projects, args[i+1])
 				i++
 			}
 		case "--priority", "-P":
-			// Collect all following non-flag arguments as priorities
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				priorities = append(priorities, args[i+1])
+				filters.Priorities = append(filters.Priorities, args[i+1])
 				i++
 			}
 		}
@@ -113,16 +105,15 @@ func List(database *sql.DB, args []string) error {
 	}
 
 	if listingCount > 0 {
-		// Check if combined with other flags
-		hasOtherFlags := showAll || showToday || showTomorrow || showOverdue || showUpcoming ||
-		dueDate != "" || fromDate != "" || toDate != "" ||
-		len(tags) > 0 || len(projects) > 0 || len(priorities) > 0 || showNote
+		hasOtherFlags := showAll || showDone || showTrash || filters.Today || filters.Tomorrow ||
+			filters.Overdue || filters.Upcoming || filters.DueDate != "" || filters.FromDate != "" ||
+			filters.ToDate != "" || filters.Query != "" || len(filters.Tags) > 0 ||
+			len(filters.Projects) > 0 || len(filters.Priorities) > 0 || showNote
 
 		if hasOtherFlags {
 			return fmt.Errorf("--tags, --projects, and --priorities cannot be combined with other filters")
 		}
 
-		// Handle listing commands
 		if listTags {
 			return displayTags(database)
 		}
@@ -134,18 +125,44 @@ func List(database *sql.DB, args []string) error {
 		}
 	}
 
-	showDashboard := !showAll && !showDone && !showTrash && !showToday && !showTomorrow && !showOverdue && !showUpcoming &&
-		dueDate == "" && fromDate == "" && toDate == "" && query == "" &&
-		len(tags) == 0 && len(projects) == 0 && len(priorities) == 0
+	// If no specific filter, show dashboard
+	showDashboard := !showAll && !showDone && !showTrash && !filters.Today && !filters.Tomorrow &&
+		!filters.Overdue && !filters.Upcoming && filters.DueDate == "" && filters.FromDate == "" &&
+		filters.ToDate == "" && filters.Query == "" && len(filters.Tags) == 0 &&
+		len(filters.Projects) == 0 && len(filters.Priorities) == 0
 
 	if showDashboard {
 		return displayDashboard(database, showNote)
 	}
 
-	tasks, err := getFilteredTasks(database, showAll, showDone, showTrash, showToday, showTomorrow, showOverdue, showUpcoming,
-		dueDate, fromDate, toDate, query, tags, projects, priorities)
+	// Get initial task set
+	var tasks []models.Task
+	var err error
+
+	if showTrash {
+		tasks, err = db.GetDeletedTasks(database)
+	} else if showDone {
+		allTasks, err := db.GetTasks(database, true)
+		if err != nil {
+			return fmt.Errorf("failed to get tasks: %w", err)
+		}
+		for _, task := range allTasks {
+			if task.CompletedDate != nil {
+				tasks = append(tasks, task)
+			}
+		}
+	} else {
+		tasks, err = db.GetTasks(database, showAll)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
+	}
+
+	// Apply filters
+	tasks, err = filter.ApplyFilters(tasks, filters)
+	if err != nil {
+		return fmt.Errorf("failed to apply filters: %w", err)
 	}
 
 	if len(tasks) == 0 {
