@@ -152,24 +152,19 @@ func Remove(database *sql.DB, args []string) error {
 
 	if removeTrash {
 		permanentDelete = true
-		initialTasks, err = db.GetDeletedTasks(database)
+		initialTasks, err = db.GetTasks(database, true, false)
 		if err != nil {
 			return fmt.Errorf("failed to get deleted tasks: %w", err)
 		}
 	} else if removeAll {
-		initialTasks, err = db.GetTasks(database, false)
+		initialTasks, err = db.GetTasks(database, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}
 	} else if removeDone {
-		allTasks, err := db.GetTasks(database, true)
+		initialTasks, err = db.GetTasks(database, false, true)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-		for _, task := range allTasks {
-			if task.CompletedDate != nil {
-				initialTasks = append(initialTasks, task)
-			}
 		}
 	} else if len(ids) > 0 {
 		// Get tasks by IDs
@@ -179,11 +174,16 @@ func Remove(database *sql.DB, args []string) error {
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
-			initialTasks = append(initialTasks, *task)
+			// Skip deleted tasks for normal operations
+			if !task.Deleted {
+				initialTasks = append(initialTasks, *task)
+			} else {
+				fmt.Printf("Warning: Task #%d is already deleted\n", id)
+			}
 		}
 	} else {
 		// Get all incomplete tasks for filtering
-		initialTasks, err = db.GetTasks(database, false)
+		initialTasks, err = db.GetTasks(database, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}

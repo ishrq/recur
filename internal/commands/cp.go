@@ -105,11 +105,15 @@ func Copy(database *sql.DB, args []string) error {
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
+			if task.Deleted {
+				fmt.Printf("Warning: Task #%d is deleted\n", id)
+				continue
+			}
 			tasksToCopy = append(tasksToCopy, *task)
 		}
 	} else {
 		// Get all incomplete tasks for filtering
-		tasksToCopy, err = db.GetTasks(database, false)
+		tasksToCopy, err = db.GetTasks(database, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}

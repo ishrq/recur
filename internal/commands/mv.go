@@ -104,11 +104,15 @@ func Move(database *sql.DB, args []string) error {
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
+			if task.Deleted {
+				fmt.Printf("Warning: Task #%d is deleted\n", id)
+				continue
+			}
 			tasksToEdit = append(tasksToEdit, *task)
 		}
 	} else {
 		// Get all incomplete tasks for filtering
-		tasksToEdit, err = db.GetTasks(database, false)
+		tasksToEdit, err = db.GetTasks(database, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}

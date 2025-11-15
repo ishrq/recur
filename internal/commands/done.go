@@ -100,11 +100,15 @@ func Done(database *sql.DB, args []string) error {
 				fmt.Printf("Task #%d already completed\n", id)
 				continue
 			}
+			if task.Deleted {
+				fmt.Printf("Task #%d is deleted\n", id)
+				continue
+			}
 			tasksToComplete = append(tasksToComplete, *task)
 		}
 	} else {
 		// Get all incomplete tasks for filtering
-		tasksToComplete, err = db.GetTasks(database, false)
+		tasksToComplete, err = db.GetTasks(database, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}

@@ -18,7 +18,7 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 	nextWeek := today.AddDate(0, 0, 7)
 
 	// Get all incomplete tasks
-	allTasks, err := db.GetTasks(database, false)
+	allTasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
@@ -85,7 +85,7 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 }
 
 func displayTags(database *sql.DB) error {
-	tasks, err := db.GetTasks(database, false)
+	tasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
@@ -121,7 +121,7 @@ func displayTags(database *sql.DB) error {
 }
 
 func displayProjects(database *sql.DB) error {
-	tasks, err := db.GetTasks(database, false)
+	tasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
@@ -157,7 +157,7 @@ func displayProjects(database *sql.DB) error {
 }
 
 func displayPriorities(database *sql.DB) error {
-	tasks, err := db.GetTasks(database, false)
+	tasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}

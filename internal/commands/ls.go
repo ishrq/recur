@@ -140,19 +140,22 @@ func List(database *sql.DB, args []string) error {
 	var err error
 
 	if showTrash {
-		tasks, err = db.GetDeletedTasks(database)
+		tasks, err = db.GetTasks(database, true, false)
 	} else if showDone {
-		allTasks, err := db.GetTasks(database, true)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
+		tasks, err = db.GetTasks(database, false, true)
+	} else if showAll {
+		// Get both completed and incomplete
+		incompleteTasks, err1 := db.GetTasks(database, false, false)
+		completedTasks, err2 := db.GetTasks(database, false, true)
+		if err1 != nil {
+			return fmt.Errorf("failed to get tasks: %w", err1)
 		}
-		for _, task := range allTasks {
-			if task.CompletedDate != nil {
-				tasks = append(tasks, task)
-			}
+		if err2 != nil {
+			return fmt.Errorf("failed to get tasks: %w", err2)
 		}
+		tasks = append(incompleteTasks, completedTasks...)
 	} else {
-		tasks, err = db.GetTasks(database, showAll)
+		tasks, err = db.GetTasks(database, false, false)
 	}
 
 	if err != nil {
