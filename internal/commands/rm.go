@@ -28,6 +28,7 @@ func Remove(database *sql.DB, args []string) error {
 	var removeDone bool
 	var removeTrash bool
 	var purge bool
+	var undo bool
 
 	filters := filter.Filters{}
 
@@ -42,6 +43,8 @@ func Remove(database *sql.DB, args []string) error {
 			removeTrash = true
 		case "--purge":
 			purge = true
+		case "--undo":
+			undo = true
 		case "--today":
 			filters.Today = true
 		case "--tomorrow":
@@ -96,6 +99,12 @@ func Remove(database *sql.DB, args []string) error {
 	}
 
 	// Check for conflicting flags
+	if undo {
+		if removeAll || removeDone || removeTrash || purge {
+			return fmt.Errorf("--undo cannot be combined with --all, --done, --trash, or --purge")
+		}
+	}
+
 	specialFlags := []bool{removeAll, removeDone, removeTrash, purge}
 	specialFlagCount := 0
 	for _, flag := range specialFlags {
@@ -141,6 +150,89 @@ func Remove(database *sql.DB, args []string) error {
 		}
 
 		fmt.Printf("\n✓ All tasks permanently deleted\n")
+		return nil
+	}
+
+	if undo {
+		var tasksToRestore []*models.Task
+		var initialTasks []models.Task
+		var err error
+
+		if len(ids) > 0 {
+			// Get tasks by IDs and check if deleted
+			for _, id := range ids {
+				task, err := db.GetTaskByID(database, id)
+				if err != nil {
+					fmt.Printf("Warning: Task #%d not found\n", id)
+					continue
+				}
+				// Only include deleted tasks for undo
+				if task.Deleted {
+					initialTasks = append(initialTasks, *task)
+				} else {
+					fmt.Printf("Warning: Task #%d is not deleted\n", id)
+				}
+			}
+		} else {
+			// Get all deleted tasks for filtering
+			initialTasks, err = db.GetTasks(database, true, false)
+			if err != nil {
+				return fmt.Errorf("failed to get deleted tasks: %w", err)
+			}
+
+			// Apply filters
+			initialTasks, err = filter.ApplyFilters(initialTasks, filters)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Convert to tasksToRestore
+		for i := range initialTasks {
+			tasksToRestore = append(tasksToRestore, &initialTasks[i])
+		}
+
+		if len(tasksToRestore) == 0 {
+			return fmt.Errorf("no deleted tasks found matching criteria")
+		}
+
+		// Display tasks to be restored
+		fmt.Printf("\nFound %d deleted task(s) to restore:\n", len(tasksToRestore))
+		for _, t := range tasksToRestore {
+			fmt.Printf("#%-4d %s\n", t.ID, t.Name)
+		}
+		fmt.Println()
+
+		// Ask for confirmation
+		fmt.Printf("Restore these %d task(s)? (y/n): ", len(tasksToRestore))
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Restore cancelled.")
+			return nil
+		}
+
+		// Restore tasks
+		restored := 0
+		for _, t := range tasksToRestore {
+			if err := db.RestoreTask(database, t.ID); err != nil {
+				fmt.Printf("Warning: Failed to restore task #%d: %v\n", t.ID, err)
+				continue
+			}
+
+			fmt.Printf("↺ Restored #%d: %s\n", t.ID, t.Name)
+			restored++
+		}
+
+		if restored > 0 {
+			fmt.Printf("\n%d task(s) restored\n", restored)
+		}
+
 		return nil
 	}
 

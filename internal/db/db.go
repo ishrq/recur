@@ -395,3 +395,34 @@ func RestoreTask(db *sql.DB, id int) error {
 
 	return nil
 }
+
+func UndoCompleteTask(db *sql.DB, id int) error {
+	query := `
+		UPDATE tasks
+		SET completed_date = NULL
+		WHERE id = ? AND completed_date IS NOT NULL AND deleted = 0
+	`
+
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("task not found or not completed")
+	}
+
+	return nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

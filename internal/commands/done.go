@@ -26,11 +26,14 @@ func Done(database *sql.DB, args []string) error {
 	}
 
 	var ids []int
+	var undo bool
 	filters := filter.Filters{}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
+		case "--undo":
+			undo = true
 		case "--today":
 			filters.Today = true
 		case "--tomorrow":
@@ -82,6 +85,86 @@ func Done(database *sql.DB, args []string) error {
 			}
 			ids = append(ids, id)
 		}
+	}
+
+	if undo {
+		var tasksToUndo []models.Task
+		var err error
+
+		if len(ids) > 0 {
+			// Get tasks by IDs
+			for _, id := range ids {
+				task, err := db.GetTaskByID(database, id)
+				if err != nil {
+					fmt.Printf("Warning: Task #%d not found\n", id)
+					continue
+				}
+				if task.CompletedDate == nil {
+					fmt.Printf("Warning: Task #%d is not completed\n", id)
+					continue
+				}
+				if task.Deleted {
+					fmt.Printf("Warning: Task #%d is deleted\n", id)
+					continue
+				}
+				tasksToUndo = append(tasksToUndo, *task)
+			}
+		} else {
+			// Get all completed tasks for filtering
+			tasksToUndo, err = db.GetTasks(database, false, true)
+			if err != nil {
+				return fmt.Errorf("failed to get tasks: %w", err)
+			}
+
+			// Apply filters
+			tasksToUndo, err = filter.ApplyFilters(tasksToUndo, filters)
+			if err != nil {
+				return err
+			}
+		}
+
+		if len(tasksToUndo) == 0 {
+			return fmt.Errorf("no completed tasks found matching criteria")
+		}
+
+		// Display tasks to be unmarked
+		fmt.Printf("\nFound %d completed task(s) to unmark:\n", len(tasksToUndo))
+		for _, t := range tasksToUndo {
+			fmt.Printf("#%-4d %s\n", t.ID, t.Name)
+		}
+		fmt.Println()
+
+		// Ask for confirmation
+		fmt.Printf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasksToUndo))
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Operation cancelled.")
+			return nil
+		}
+
+		// Unmark tasks
+		unmarked := 0
+		for _, task := range tasksToUndo {
+			if err := db.UndoCompleteTask(database, task.ID); err != nil {
+				fmt.Printf("Warning: Failed to unmark task #%d: %v\n", task.ID, err)
+				continue
+			}
+
+			fmt.Printf("↺ Unmarked #%d: %s\n", task.ID, task.Name)
+			unmarked++
+		}
+
+		if unmarked > 0 {
+			fmt.Printf("\n%d task(s) unmarked as incomplete\n", unmarked)
+		}
+
+		return nil
 	}
 
 	// Collect tasks to mark as done
