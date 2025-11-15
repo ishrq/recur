@@ -122,7 +122,7 @@ func Remove(database *sql.DB, args []string) error {
 		fmt.Println("\n⚠️  WARNING: This will PERMANENTLY delete ALL tasks from the database.")
 		fmt.Println("⚠️  This action CANNOT be undone!")
 		fmt.Printf("\nTotal tasks in database: %d\n\n", count)
-		fmt.Print("Type 'DELETE' to confirm: ")
+		fmt.Print("Type 'DELETE ALL' to confirm: ")
 
 		reader := bufio.NewReader(os.Stdin)
 		response, err := reader.ReadString('\n')
@@ -131,7 +131,7 @@ func Remove(database *sql.DB, args []string) error {
 		}
 
 		response = strings.TrimSpace(response)
-		if response != "DELETE" {
+		if response != "DELETE ALL" {
 			fmt.Println("Purge cancelled.")
 			return nil
 		}
