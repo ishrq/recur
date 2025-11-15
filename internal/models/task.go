@@ -15,4 +15,5 @@ type Task struct {
 	LastTaskID     *int
 	RecurFrequency string
 	RecurEndDate   *time.Time
+	Deleted        bool
 }
