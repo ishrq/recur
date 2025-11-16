@@ -31,20 +31,114 @@ func PrintHelp(command string) {
 			Usage: []string{
 				"recur add \"Task name\"",
 				"recur add \"Task name @(date time, frequency, end) #tag +project !priority *note\"",
-				"recur add --edit   	               Opens editor to add task(s)",
-				"recur add --edit \"Task name #tag\"   Opens editor with prefilled task name and tag",
+				"recur add --edit                      Opens editor to add task(s)",
+				"recur add --edit \"Task name #tag\"    Opens editor with prefilled content",
+			},
+			Options: []Option{
+				{"-e, --edit", "Open $EDITOR to add task(s) (one per line)"},
+				{"-h, --help", "Show this help message"},
 			},
 			Examples: []string{
 				"recur add \"Buy groceries\"",
-				"recur add \"Team meeting @(2025-11-12 15:00) +Work\"",
+				"recur add \"Team meeting @(2025-11-20 15:00) +Work\"",
 				"recur add \"Water plants @(today 9am, 1d) #chores\"",
 				"recur add \"Weekly review @(Friday 5pm, 1w, 2025-12-31) +Personal\"",
-				"recur add \"Dentist appointment @(2025-11-20 2pm) !urgent *'Bring insurance card'\"",
+				"recur add \"Dentist @(2025-11-20 2pm) !urgent *'Bring insurance card'\"",
 				"recur add --edit",
 				"recur add --edit \"Read book #leisure\"",
 			},
-			ComingSoon: []string{
-				"Full date parsing syntax documentation",
+		},
+
+		"dates": {
+			Name:        "Date Parsing Reference",
+			Description: "Comprehensive guide to date and time formats in Recur",
+			Usage: []string{
+				"Date format: @(date time, frequency, end date)",
+				"  - date time: When the task is due",
+				"  - frequency: How often it repeats (optional)",
+				"  - end date: When recurring stops (optional)",
+			},
+			Options: []Option{
+				{"Semantic Dates", ""},
+				{"  now", "Current date and time"},
+				{"  today", "Today at 12:00 PM"},
+				{"  tomorrow, tmr", "Tomorrow at 12:00 PM"},
+				{"  yesterday", "Yesterday at 12:00 PM"},
+				{"  next week", "7 days from now at 12:00 PM"},
+				{"  next month", "Same day next month at 12:00 PM"},
+				{"", ""},
+
+				{"Weekday Names", ""},
+				{"  monday, mon", "Next Monday at 12:00 PM"},
+				{"  tuesday, tue", "Next Tuesday at 12:00 PM"},
+				{"  wednesday, wed", "Next Wednesday at 12:00 PM"},
+				{"  thursday, thu", "Next Thursday at 12:00 PM"},
+				{"  friday, fri", "Next Friday at 12:00 PM"},
+				{"  saturday, sat", "Next Saturday at 12:00 PM"},
+				{"  sunday, sun", "Next Sunday at 12:00 PM"},
+				{"", ""},
+
+				{"Relative Dates", ""},
+				{"  +3d", "3 days from now"},
+				{"  -2w", "2 weeks ago"},
+				{"  +1m", "1 month from now"},
+				{"  +1y", "1 year from now"},
+				{"  +6h", "6 hours from now"},
+				{"", ""},
+
+				{"Standard Formats", ""},
+				{"  2025-11-20", "ISO date (default 12:00 PM)"},
+				{"  2025-11-20 15:04", "ISO date with time (24-hour)"},
+				{"  2025-11-20 3:04pm", "ISO date with time (12-hour)"},
+				{"  2025/11/20", "Date with slashes"},
+				{"  11/20/2025", "US date format"},
+				{"  20-11-2025", "European date format"},
+				{"  Jan 20", "Month and day (current year, 12:00 PM)"},
+				{"  Jan 20 3pm", "Month, day, and time"},
+				{"  January 20 15:04", "Full month name with time"},
+				{"", ""},
+
+				{"Frequency Formats", ""},
+				{"  1h, 2h, 12h", "Every N hours"},
+				{"  1d, 2d, 7d", "Every N days"},
+				{"  1w, 2w, 4w", "Every N weeks"},
+				{"  1m, 2m, 6m", "Every N months (calendar-aware)"},
+				{"  1y, 2y", "Every N years (calendar-aware)"},
+				{"  hourly", "Every hour"},
+				{"  daily", "Every day"},
+				{"  weekly", "Every week"},
+				{"  monthly", "Every month"},
+				{"  yearly", "Every year"},
+			},
+			Examples: []string{
+				"# Semantic dates",
+				"recur add \"Call mom @(tomorrow)\"",
+				"recur add \"Standup @(today 9am)\"",
+				"recur add \"Lunch meeting @(friday 12pm)\"",
+				"",
+				"# Relative dates",
+				"recur add \"Follow up @(+3d)\"",
+				"recur add \"Review notes from @(-1w)\"",
+				"recur add \"Plan trip @(+2m)\"",
+				"",
+				"# Standard formats",
+				"recur add \"Deadline @(2025-12-31)\"",
+				"recur add \"Appointment @(2025-11-20 14:30)\"",
+				"recur add \"Call @(Jan 15 3pm)\"",
+				"",
+				"# Recurring tasks",
+				"recur add \"Take vitamins @(today 8am, daily)\"",
+				"recur add \"Backup files @(monday 6pm, weekly)\"",
+				"recur add \"Pay rent @(2025-12-01, monthly, 2026-12-01)\"",
+				"recur add \"Quarterly review @(2025-12-31, 3m, 2027-12-31)\"",
+				"recur add \"Team sync @(tomorrow 10am, 2d, +30d)\"",
+				"",
+				"# Calendar-aware monthly recurrence",
+				"recur add \"Bill due @(2025-01-31, monthly)\"  # Feb 28/29, Mar 31, etc.",
+				"",
+				"# Complex examples",
+				"recur add \"Gym @(monday 6am, 2d, +60d) #health !high\"",
+				"recur add \"Water plants @(today, 3d) #chores +home *'Living room only'\"",
 			},
 		},
 		"ls": {
@@ -292,9 +386,6 @@ func PrintHelp(command string) {
 				"recur mv --due today \"!urgent\"",
 				"recur mv --project Home \"+Personal\"",
 			},
-			ComingSoon: []string{
-				"Bulk edit with interactive mode",
-			},
 		},
 	}
 
@@ -310,25 +401,25 @@ func PrintHelp(command string) {
 func printMainHelp() {
 	help := `Recur - A CLI todo app with recurring tasks
 
-Usage:
-  recur <command> [arguments]
+	Usage:
+	recur <command> [arguments]
 
-Commands:
-  add     Add a new task
-  ls      List tasks
-  done    Complete task(s)
-  rm      Delete task(s)
-  cp      Copy task(s)
-  mv      Edit task(s)
-  help    Show this help message
+	Commands:
+	add     Add a new task
+	ls      List tasks
+	done    Complete task(s)
+	rm      Delete task(s)
+	cp      Copy task(s)
+	mv      Edit task(s)
+	help    Show this help message
 
-Run 'recur <command> --help' for more information on a command.
+	Run 'recur <command> --help' for more information on a command.
 
-Examples:
-  recur add "Buy groceries @(tomorrow) #shopping"
-  recur ls --today
-  recur done --tag work
-  recur rm --undo 5`
+	Examples:
+	recur add "Buy groceries @(tomorrow) #shopping"
+	recur ls --today
+	recur done --tag work
+	recur rm --undo 5`
 
 	fmt.Println(help)
 }
