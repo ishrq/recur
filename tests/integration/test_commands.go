@@ -53,12 +53,9 @@ func TestDone(database *sql.DB, args []string) error {
 		}
 
 		// Handle recurring task
-		if task.RecurFrequency != "" {
-			duration, err := parser.ParseFrequency(task.RecurFrequency)
-			if err == nil && task.DueDate != nil {
-				nextDueDate := task.DueDate.Add(duration)
-
-				// Check end date
+		if task.RecurFrequency != "" && task.DueDate != nil {
+			nextDueDate, err := parser.CalculateNextOccurrence(*task.DueDate, task.RecurFrequency)
+			if err == nil {
 				if task.RecurEndDate == nil || !nextDueDate.After(*task.RecurEndDate) {
 					nextTask := &models.Task{
 						Name:           task.Name,

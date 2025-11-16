@@ -256,18 +256,16 @@ func Done(database *sql.DB, args []string) error {
 }
 
 func handleRecurringTask(database *sql.DB, task *models.Task) error {
-	// Parse the frequency
-	duration, err := parser.ParseFrequency(task.RecurFrequency)
-	if err != nil {
-		return fmt.Errorf("invalid frequency '%s': %w", task.RecurFrequency, err)
-	}
-
-	// Calculate next due date
+	// Validate recurring task has a due date
 	if task.DueDate == nil {
 		return fmt.Errorf("recurring task must have a due date")
 	}
 
-	nextDueDate := task.DueDate.Add(duration)
+	// Calculate next due date using calendar-aware function
+	nextDueDate, err := parser.CalculateNextOccurrence(*task.DueDate, task.RecurFrequency)
+	if err != nil {
+		return fmt.Errorf("invalid frequency '%s': %w", task.RecurFrequency, err)
+	}
 
 	// Check if we've passed the end date
 	if task.RecurEndDate != nil && nextDueDate.After(*task.RecurEndDate) {
