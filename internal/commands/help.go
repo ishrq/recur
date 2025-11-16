@@ -31,6 +31,8 @@ func PrintHelp(command string) {
 			Usage: []string{
 				"recur add \"Task name\"",
 				"recur add \"Task name @(date time, frequency, end) #tag +project !priority *note\"",
+				"recur add --edit   	               Opens editor to add task(s)",
+				"recur add --edit \"Task name #tag\"   Opens editor with prefilled task name and tag",
 			},
 			Examples: []string{
 				"recur add \"Buy groceries\"",
@@ -38,6 +40,8 @@ func PrintHelp(command string) {
 				"recur add \"Water plants @(today 9am, 1d) #chores\"",
 				"recur add \"Weekly review @(Friday 5pm, 1w, 2025-12-31) +Personal\"",
 				"recur add \"Dentist appointment @(2025-11-20 2pm) !urgent *'Bring insurance card'\"",
+				"recur add --edit",
+				"recur add --edit \"Read book #leisure\"",
 			},
 			ComingSoon: []string{
 				"Full date parsing syntax documentation",
