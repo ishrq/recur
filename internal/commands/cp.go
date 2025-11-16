@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/editor"
 	"github.com/ishrq/recur/internal/filter"
 	"github.com/ishrq/recur/internal/models"
 	"github.com/ishrq/recur/internal/parser"
@@ -129,7 +130,18 @@ func Copy(database *sql.DB, args []string) error {
 		return fmt.Errorf("no tasks found matching criteria")
 	}
 
-	// Display tasks to be copied
+	// If no modification string provided, use $EDITOR
+	if modifyStr == "" {
+		if len(tasksToCopy) == 1 {
+			// Single task copying with editor
+			return copySingleTaskInEditor(database, &tasksToCopy[0])
+		} else {
+			// Multiple task copying with editor
+			return copyMultipleTasksInEditor(database, tasksToCopy)
+		}
+	}
+
+	// Inline modification
 	fmt.Printf("\nFound %d task(s) to copy:\n", len(tasksToCopy))
 	for _, t := range tasksToCopy {
 		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
@@ -208,4 +220,124 @@ func Copy(database *sql.DB, args []string) error {
 	}
 
 	return nil
+}
+
+func copySingleTaskInEditor(database *sql.DB, task *models.Task) error {
+	content := editor.FormatTaskForEditor(task)
+
+	for {
+		edited, err := editor.OpenEditor(content)
+		if err != nil {
+			return err
+		}
+
+		editedTask, err := editor.ParseEditedTask(edited)
+		if err != nil {
+			fmt.Printf("\nError parsing edited task: %v\n", err)
+			fmt.Print("Press Enter to re-edit, or Ctrl+C to cancel: ")
+			bufio.NewReader(os.Stdin).ReadString('\n')
+			content = edited // Use the invalid content so user can fix it
+			continue
+		}
+
+		newTask := &models.Task{
+			Name:        editedTask.Name,
+			DueDate:     editedTask.DueDate,
+			CreatedDate: time.Now(),
+			Tag:         editedTask.Tag,
+			Project:     editedTask.Project,
+			Priority:    editedTask.Priority,
+			Note:        editedTask.Note,
+			RecurFrequency: editedTask.RecurFrequency,
+			RecurEndDate:   editedTask.RecurEndDate,
+		}
+
+		hasChanges := editor.HasChanges(task, editedTask)
+
+		newID, err := CreateTask(database, newTask)
+		if err != nil {
+			return fmt.Errorf("failed to create task: %w", err)
+		}
+
+		if hasChanges {
+			fmt.Printf("✓ Created new task #%d: %s\n", newID, newTask.Name)
+		} else {
+			fmt.Printf("✓ Duplicated #%d → #%d: %s\n", task.ID, newID, newTask.Name)
+		}
+
+		return nil
+	}
+}
+
+func copyMultipleTasksInEditor(database *sql.DB, tasks []models.Task) error {
+	content := editor.FormatTasksForEditor(tasks)
+
+	for {
+		edited, err := editor.OpenEditor(content)
+		if err != nil {
+			return err
+		}
+
+		editedTasks, errors := editor.ParseEditedTasks(edited, tasks)
+
+		if len(errors) > 0 {
+			fmt.Println("\nErrors found:")
+			for _, err := range errors {
+				fmt.Printf("  - %v\n", err)
+			}
+			fmt.Print("\nPress Enter to re-edit, or Ctrl+C to cancel: ")
+			bufio.NewReader(os.Stdin).ReadString('\n')
+			content = edited // Use the invalid content so user can fix it
+			continue
+		}
+
+		copied := 0
+		for id, editedTask := range editedTasks {
+			var original *models.Task
+			for i := range tasks {
+				if tasks[i].ID == id {
+					original = &tasks[i]
+					break
+				}
+			}
+
+			if original == nil {
+				continue
+			}
+
+			newTask := &models.Task{
+				Name:           editedTask.Name,
+				DueDate:        editedTask.DueDate,
+				CreatedDate:    time.Now(),
+				Tag:            editedTask.Tag,
+				Project:        editedTask.Project,
+				Priority:       editedTask.Priority,
+				Note:           editedTask.Note,
+				RecurFrequency: editedTask.RecurFrequency,
+				RecurEndDate:   editedTask.RecurEndDate,
+			}
+
+			newID, err := CreateTask(database, newTask)
+			if err != nil {
+				fmt.Printf("Warning: Failed to copy task #%d: %v\n", id, err)
+				continue
+			}
+
+			hasChanges := editor.HasChanges(original, editedTask)
+
+			if hasChanges {
+				fmt.Printf("✓ Created new task from #%d → #%d: %s\n", id, newID, newTask.Name)
+			} else {
+				fmt.Printf("✓ Duplicated #%d → #%d: %s\n", id, newID, newTask.Name)
+			}
+
+			copied++
+		}
+
+		if copied > 0 {
+			fmt.Printf("\n%d task(s) copied\n", copied)
+		}
+
+		return nil
+	}
 }
