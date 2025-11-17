@@ -25,6 +25,8 @@ func List(database *sql.DB, args []string) error {
 	var listTags bool
 	var listProjects bool
 	var listPriorities bool
+	var exportPath string
+	var exportFlag bool
 
 	filters := filter.Filters{}
 
@@ -73,6 +75,12 @@ func List(database *sql.DB, args []string) error {
 			listPriorities = true
 		case "--note", "-n":
 			showNote = true
+		case "--export":
+			exportFlag = true
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				exportPath = args[i+1]
+				i++
+			}
 		case "--tag", "-t":
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				filters.Tags = append(filters.Tags, args[i+1])
@@ -108,7 +116,7 @@ func List(database *sql.DB, args []string) error {
 		hasOtherFlags := showAll || showDone || showTrash || filters.Today || filters.Tomorrow ||
 			filters.Overdue || filters.Upcoming || filters.DueDate != "" || filters.FromDate != "" ||
 			filters.ToDate != "" || filters.Query != "" || len(filters.Tags) > 0 ||
-			len(filters.Projects) > 0 || len(filters.Priorities) > 0 || showNote
+			len(filters.Projects) > 0 || len(filters.Priorities) > 0 || showNote || exportFlag
 
 		if hasOtherFlags {
 			return fmt.Errorf("--tags, --projects, and --priorities cannot be combined with other filters")
@@ -131,7 +139,7 @@ func List(database *sql.DB, args []string) error {
 		filters.ToDate == "" && filters.Query == "" && len(filters.Tags) == 0 &&
 		len(filters.Projects) == 0 && len(filters.Priorities) == 0
 
-	if showDashboard {
+	if showDashboard && !exportFlag {
 		return displayDashboard(database, showNote)
 	}
 
@@ -162,7 +170,6 @@ func List(database *sql.DB, args []string) error {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
 
-	// Apply filters
 	tasks, err = filter.ApplyFilters(tasks, filters)
 	if err != nil {
 		return fmt.Errorf("failed to apply filters: %w", err)
@@ -171,6 +178,13 @@ func List(database *sql.DB, args []string) error {
 	if len(tasks) == 0 {
 		fmt.Println("No tasks found.")
 		return nil
+	}
+
+	if exportFlag {
+		if exportPath == "" {
+			exportPath = generateExportFilename(filters, showAll, showDone, showTrash)
+		}
+		return exportTasksToCSV(tasks, exportPath)
 	}
 
 	printTasks(tasks, showNote)
