@@ -360,9 +360,25 @@ func PermanentlyDeleteTask(db *sql.DB, id int) error {
 }
 
 func PurgeAllTasks(db *sql.DB) error {
-	query := `DELETE FROM tasks`
-	_, err := db.Exec(query)
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Will be no-op if Commit succeeds
+
+	if _, err := tx.Exec(`DELETE FROM tasks`); err != nil {
+		return fmt.Errorf("failed to delete tasks: %w", err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM sqlite_sequence WHERE name='tasks'`); err != nil {
+		return fmt.Errorf("failed to reset auto-increment: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 func GetAllTasksCount(db *sql.DB) (int, error) {
