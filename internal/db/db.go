@@ -75,10 +75,15 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	)
 
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to insert task '%s': %w", task.Name, err)
 	}
 
-	return result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	return id, nil
 }
 
 // GetTaskByID gets any task by ID (no filtering)
@@ -115,10 +120,10 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("task not found")
+		return nil, fmt.Errorf("task with ID %d not found", id)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get task %d: %w", id, err)
 	}
 
 	// Convert nullable fields
@@ -148,7 +153,7 @@ func GetTasks(db *sql.DB, deleted bool, completed bool) ([]models.Task, error) {
 
 	rows, err := db.Query(query, boolToInt(deleted))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query tasks (deleted=%v, completed=%v): %w", deleted, completed, err)
 	}
 	defer rows.Close()
 
@@ -156,12 +161,16 @@ func GetTasks(db *sql.DB, deleted bool, completed bool) ([]models.Task, error) {
 	for rows.Next() {
 		task, err := scanTask(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan task row: %w", err)
 		}
 		tasks = append(tasks, task)
 	}
 
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating task rows: %w", err)
+	}
+
+	return tasks, nil
 }
 
 func scanTask(rows *sql.Rows) (models.Task, error) {
@@ -206,16 +215,16 @@ func MarkTaskDone(db *sql.DB, id int) error {
 
 	result, err := db.Exec(query, time.Now(), id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to mark task %d as done: %w", id, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found or already deleted")
+		return fmt.Errorf("task %d not found or already deleted", id)
 	}
 
 	return nil
@@ -242,16 +251,16 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 	)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update task %d: %w", task.ID, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", task.ID, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found or already deleted")
+		return fmt.Errorf("task %d not found or already deleted", task.ID)
 	}
 
 	return nil
@@ -266,16 +275,16 @@ func DeleteTask(db *sql.DB, id int) error {
 
 	result, err := db.Exec(query, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete task %d: %w", id, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found or already deleted")
+		return fmt.Errorf("task %d not found or already deleted", id)
 	}
 
 	return nil
@@ -286,16 +295,16 @@ func PermanentlyDeleteTask(db *sql.DB, id int) error {
 
 	result, err := db.Exec(query, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to permanently delete task %d: %w", id, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found")
+		return fmt.Errorf("task %d not found", id)
 	}
 
 	return nil
@@ -306,7 +315,7 @@ func PurgeAllTasks(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Will be no-op if Commit succeeds
+	defer tx.Rollback()
 
 	if _, err := tx.Exec(`DELETE FROM tasks`); err != nil {
 		return fmt.Errorf("failed to delete tasks: %w", err)
@@ -327,7 +336,10 @@ func GetAllTasksCount(db *sql.DB) (int, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM tasks`
 	err := db.QueryRow(query).Scan(&count)
-	return count, err
+	if err != nil {
+		return 0, fmt.Errorf("failed to get task count: %w", err)
+	}
+	return count, nil
 }
 
 func RestoreTask(db *sql.DB, id int) error {
@@ -339,16 +351,16 @@ func RestoreTask(db *sql.DB, id int) error {
 
 	result, err := db.Exec(query, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to restore task %d: %w", id, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found or already restored")
+		return fmt.Errorf("task %d not found or already restored", id)
 	}
 
 	return nil
@@ -363,16 +375,16 @@ func UndoCompleteTask(db *sql.DB, id int) error {
 
 	result, err := db.Exec(query, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to undo completion for task %d: %w", id, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task not found or not completed")
+		return fmt.Errorf("task %d not found or not completed", id)
 	}
 
 	return nil
