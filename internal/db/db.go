@@ -121,37 +121,8 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 		return nil, err
 	}
 
-	task.Deleted = deleted == 1
-
 	// Convert nullable fields
-	if dueDate.Valid {
-		task.DueDate = &dueDate.Time
-	}
-	if completedDate.Valid {
-		task.CompletedDate = &completedDate.Time
-	}
-	if tag.Valid {
-		task.Tag = tag.String
-	}
-	if project.Valid {
-		task.Project = project.String
-	}
-	if priority.Valid {
-		task.Priority = priority.String
-	}
-	if note.Valid {
-		task.Note = note.String
-	}
-	if lastTaskID.Valid {
-		id := int(lastTaskID.Int64)
-		task.LastTaskID = &id
-	}
-	if recurFrequency.Valid {
-		task.RecurFrequency = recurFrequency.String
-	}
-	if recurEndDate.Valid {
-		task.RecurEndDate = &recurEndDate.Time
-	}
+	convertNullableFields(&task, dueDate, completedDate, recurEndDate, tag, project, priority, note, recurFrequency, lastTaskID, deleted)
 
 	return &task, nil
 }
@@ -220,37 +191,8 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 		return task, err
 	}
 
-	task.Deleted = deleted == 1
-
 	// Convert nullable fields
-	if dueDate.Valid {
-		task.DueDate = &dueDate.Time
-	}
-	if completedDate.Valid {
-		task.CompletedDate = &completedDate.Time
-	}
-	if tag.Valid {
-		task.Tag = tag.String
-	}
-	if project.Valid {
-		task.Project = project.String
-	}
-	if priority.Valid {
-		task.Priority = priority.String
-	}
-	if note.Valid {
-		task.Note = note.String
-	}
-	if lastTaskID.Valid {
-		id := int(lastTaskID.Int64)
-		task.LastTaskID = &id
-	}
-	if recurFrequency.Valid {
-		task.RecurFrequency = recurFrequency.String
-	}
-	if recurEndDate.Valid {
-		task.RecurEndDate = &recurEndDate.Time
-	}
+	convertNullableFields(&task, dueDate, completedDate, recurEndDate, tag, project, priority, note, recurFrequency, lastTaskID, deleted)
 
 	return task, nil
 }
@@ -441,4 +383,40 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// convertNullableFields converts SQL nullable types to Go types
+func convertNullableFields(task *models.Task, dueDate, completedDate, recurEndDate sql.NullTime,
+	tag, project, priority, note, recurFrequency sql.NullString, lastTaskID sql.NullInt64, deleted int) {
+
+	task.Deleted = deleted == 1
+
+	if dueDate.Valid {
+		task.DueDate = &dueDate.Time
+	}
+	if completedDate.Valid {
+		task.CompletedDate = &completedDate.Time
+	}
+	if recurEndDate.Valid {
+		task.RecurEndDate = &recurEndDate.Time
+	}
+	if tag.Valid {
+		task.Tag = tag.String
+	}
+	if project.Valid {
+		task.Project = project.String
+	}
+	if priority.Valid {
+		task.Priority = priority.String
+	}
+	if note.Valid {
+		task.Note = note.String
+	}
+	if recurFrequency.Valid {
+		task.RecurFrequency = recurFrequency.String
+	}
+	if lastTaskID.Valid {
+		id := int(lastTaskID.Int64)
+		task.LastTaskID = &id
+	}
 }
