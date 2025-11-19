@@ -222,41 +222,32 @@ func filterByQuery(tasks []models.Task, query string) []models.Task {
 	return filtered
 }
 
-func filterByTags(tasks []models.Task, tags []string) []models.Task {
+func filterByField(tasks []models.Task, values []string, getField func(models.Task) string) []models.Task {
+	if len(values) == 0 {
+		return tasks
+	}
+
 	var filtered []models.Task
 	for _, task := range tasks {
-		for _, tag := range tags {
-			if strings.EqualFold(task.Tag, tag) {
+		taskValue := getField(task)
+		for _, value := range values {
+			if strings.EqualFold(taskValue, value) {
 				filtered = append(filtered, task)
 				break
 			}
 		}
 	}
 	return filtered
+}
+
+func filterByTags(tasks []models.Task, tags []string) []models.Task {
+	return filterByField(tasks, tags, func(t models.Task) string { return t.Tag })
 }
 
 func filterByProjects(tasks []models.Task, projects []string) []models.Task {
-	var filtered []models.Task
-	for _, task := range tasks {
-		for _, project := range projects {
-			if strings.EqualFold(task.Project, project) {
-				filtered = append(filtered, task)
-				break
-			}
-		}
-	}
-	return filtered
+	return filterByField(tasks, projects, func(t models.Task) string { return t.Project })
 }
 
 func filterByPriorities(tasks []models.Task, priorities []string) []models.Task {
-	var filtered []models.Task
-	for _, task := range tasks {
-		for _, priority := range priorities {
-			if strings.EqualFold(task.Priority, priority) {
-				filtered = append(filtered, task)
-				break
-			}
-		}
-	}
-	return filtered
+	return filterByField(tasks, priorities, func(t models.Task) string { return t.Priority })
 }
