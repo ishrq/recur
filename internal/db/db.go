@@ -86,7 +86,6 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	return id, nil
 }
 
-// GetTaskByID gets any task by ID (no filtering)
 func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 	query := `
 		SELECT id, name, due_date, created_date, completed_date,
@@ -126,15 +125,11 @@ func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
 		return nil, fmt.Errorf("failed to get task %d: %w", id, err)
 	}
 
-	// Convert nullable fields
 	convertNullableFields(&task, dueDate, completedDate, recurEndDate, tag, project, priority, note, recurFrequency, lastTaskID, deleted)
 
 	return &task, nil
 }
 
-// GetTasks gets tasks based on deleted and completed status
-// deleted: true = only deleted tasks, false = only non-deleted tasks
-// completed: true = only completed tasks, false = only incomplete tasks
 func GetTasks(db *sql.DB, deleted bool, completed bool) ([]models.Task, error) {
 	query := `
 		SELECT id, name, due_date, created_date, completed_date,
@@ -200,41 +195,35 @@ func scanTask(rows *sql.Rows) (models.Task, error) {
 		return task, err
 	}
 
-	// Convert nullable fields
 	convertNullableFields(&task, dueDate, completedDate, recurEndDate, tag, project, priority, note, recurFrequency, lastTaskID, deleted)
 
 	return task, nil
 }
 
 func MarkTaskDone(db *sql.DB, id int) error {
-	query := `
-		UPDATE tasks
-		SET completed_date = ?
-		WHERE id = ? AND deleted = 0
-	`
-
-	result, err := db.Exec(query, time.Now(), id)
+	task, err := GetTaskByID(db, id)
 	if err != nil {
 		return fmt.Errorf("failed to mark task %d as done: %w", id, err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
+	if task.Deleted {
+		return fmt.Errorf("task %d is deleted", id)
 	}
 
-	if rows == 0 {
-		return fmt.Errorf("task %d not found or already deleted", id)
+	if task.CompletedDate != nil {
+		return fmt.Errorf("task %d is already completed", id)
 	}
 
-	return nil
+	now := time.Now()
+	task.CompletedDate = &now
+	return UpdateTask(db, task)
 }
 
 func UpdateTask(db *sql.DB, task *models.Task) error {
 	query := `
 		UPDATE tasks
-		SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?, recur_frequency = ?, recur_end_date = ?
-		WHERE id = ? AND deleted = 0
+		SET name = ?, due_date = ?, tag = ?, project = ?, priority = ?, note = ?, last_task_id = ?, recur_frequency = ?, recur_end_date = ?, completed_date = ?, deleted = ?
+		WHERE id = ?
 	`
 
 	result, err := db.Exec(query,
@@ -247,6 +236,8 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 		task.LastTaskID,
 		task.RecurFrequency,
 		task.RecurEndDate,
+		task.CompletedDate,
+		boolToInt(task.Deleted),
 		task.ID,
 	)
 
@@ -260,34 +251,24 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("task %d not found or already deleted", task.ID)
+		return fmt.Errorf("task %d not found", task.ID)
 	}
 
 	return nil
 }
 
 func DeleteTask(db *sql.DB, id int) error {
-	query := `
-		UPDATE tasks
-		SET deleted = 1
-		WHERE id = ? AND deleted = 0
-	`
-
-	result, err := db.Exec(query, id)
+	task, err := GetTaskByID(db, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete task %d: %w", id, err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
+	if task.Deleted {
+		return fmt.Errorf("task %d is already deleted", id)
 	}
 
-	if rows == 0 {
-		return fmt.Errorf("task %d not found or already deleted", id)
-	}
-
-	return nil
+	task.Deleted = true
+	return UpdateTask(db, task)
 }
 
 func PermanentlyDeleteTask(db *sql.DB, id int) error {
@@ -343,51 +324,35 @@ func GetAllTasksCount(db *sql.DB) (int, error) {
 }
 
 func RestoreTask(db *sql.DB, id int) error {
-	query := `
-		UPDATE tasks
-		SET deleted = 0
-		WHERE id = ? AND deleted = 1
-	`
-
-	result, err := db.Exec(query, id)
+	task, err := GetTaskByID(db, id)
 	if err != nil {
 		return fmt.Errorf("failed to restore task %d: %w", id, err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
+	if !task.Deleted {
+		return fmt.Errorf("task %d is not deleted", id)
 	}
 
-	if rows == 0 {
-		return fmt.Errorf("task %d not found or already restored", id)
-	}
-
-	return nil
+	task.Deleted = false
+	return UpdateTask(db, task)
 }
 
 func UndoCompleteTask(db *sql.DB, id int) error {
-	query := `
-		UPDATE tasks
-		SET completed_date = NULL
-		WHERE id = ? AND completed_date IS NOT NULL AND deleted = 0
-	`
-
-	result, err := db.Exec(query, id)
+	task, err := GetTaskByID(db, id)
 	if err != nil {
 		return fmt.Errorf("failed to undo completion for task %d: %w", id, err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected for task %d: %w", id, err)
+	if task.Deleted {
+		return fmt.Errorf("task %d is deleted", id)
 	}
 
-	if rows == 0 {
-		return fmt.Errorf("task %d not found or not completed", id)
+	if task.CompletedDate == nil {
+		return fmt.Errorf("task %d is not completed", id)
 	}
 
-	return nil
+	task.CompletedDate = nil
+	return UpdateTask(db, task)
 }
 
 func boolToInt(b bool) int {
