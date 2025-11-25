@@ -48,7 +48,7 @@ func parseDueDateString(dateStr string, task *models.Task) error {
 	if len(parts) > 0 {
 		dateTimeStr := strings.TrimSpace(parts[0])
 		if dateTimeStr != "" {
-			parsedDate, err := parseDateTime(dateTimeStr)
+			parsedDate, err := ParseTaskDate(dateTimeStr)
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("invalid date '%s': %v", dateTimeStr, err))
 			} else {
@@ -73,7 +73,7 @@ func parseDueDateString(dateStr string, task *models.Task) error {
 	if len(parts) > 2 {
 		endDateStr := strings.TrimSpace(parts[2])
 		if endDateStr != "" {
-			parsedEndDate, err := parseDateTime(endDateStr)
+			parsedEndDate, err := ParseTaskDate(endDateStr)
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("invalid end date '%s': %v", endDateStr, err))
 			} else {

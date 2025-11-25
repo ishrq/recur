@@ -85,14 +85,7 @@ func ApplyFilters(tasks []models.Task, filters Filters) ([]models.Task, error) {
 }
 
 func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
-	now := time.Now()
-	var targetDate time.Time
-
 	switch strings.ToLower(dateStr) {
-	case "today":
-		targetDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	case "tomorrow":
-		targetDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
 	case "none":
 		var filtered []models.Task
 		for _, task := range tasks {
@@ -101,6 +94,7 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 			}
 		}
 		return filtered, nil
+
 	case "recurring":
 		var filtered []models.Task
 		for _, task := range tasks {
@@ -109,12 +103,43 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 			}
 		}
 		return filtered, nil
-	default:
-		parsedDate, err := ParseDate(dateStr)
-		if err != nil {
-			return nil, err
+	}
+
+	dateRange, err := ParseDateFilter(dateStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date filter '%s': %w", dateStr, err)
+	}
+
+	var filtered []models.Task
+	for _, task := range tasks {
+		if task.DueDate == nil {
+			continue
 		}
-		targetDate = parsedDate
+
+		if dateRange.ContainsDate(*task.DueDate) {
+			filtered = append(filtered, task)
+		}
+	}
+
+	return filtered, nil
+}
+
+func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]models.Task, error) {
+	var fromRange, toRange *DateRange
+	var err error
+
+	if fromDateStr != "" {
+		fromRange, err = ParseDateFilter(fromDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid from date '%s': %w", fromDateStr, err)
+		}
+	}
+
+	if toDateStr != "" {
+		toRange, err = ParseDateFilter(toDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid to date '%s': %w", toDateStr, err)
+		}
 	}
 
 	var filtered []models.Task
@@ -124,47 +149,12 @@ func filterByDate(tasks []models.Task, dateStr string) ([]models.Task, error) {
 		}
 
 		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, task.DueDate.Location())
-		if taskDate.Equal(targetDate) {
-			filtered = append(filtered, task)
-		}
-	}
 
-	return filtered, nil
-}
-
-func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]models.Task, error) {
-	now := time.Now()
-	var fromDate, toDate *time.Time
-
-	if fromDateStr != "" {
-		parsed, err := ParseDate(fromDateStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid from date: %w", err)
-		}
-		fromDate = &parsed
-	}
-
-	if toDateStr != "" {
-		parsed, err := ParseDate(toDateStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid to date: %w", err)
-		}
-		toDate = &parsed
-	}
-
-	var filtered []models.Task
-	for _, task := range tasks {
-		if task.DueDate == nil {
+		if fromRange != nil && taskDate.Before(fromRange.Start) {
 			continue
 		}
 
-		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
-
-		if fromDate != nil && taskDate.Before(*fromDate) {
-			continue
-		}
-
-		if toDate != nil && taskDate.After(*toDate) {
+		if toRange != nil && taskDate.After(toRange.End) {
 			continue
 		}
 
@@ -174,47 +164,15 @@ func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]mo
 	return filtered, nil
 }
 
-func ParseDate(dateStr string) (time.Time, error) {
-	now := time.Now()
-
-	switch strings.ToLower(dateStr) {
-	case "today":
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
-	case "tomorrow":
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1), nil
-	case "yesterday":
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -1), nil
-	}
-
-	formats := []string{
-		"2006-01-02",
-		"Jan 2",
-		"Jan 2 2006",
-		"Monday",
-		"Mon",
-	}
-
-	for _, format := range formats {
-		if t, err := time.Parse(format, dateStr); err == nil {
-			if t.Year() == 0 {
-				t = time.Date(now.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location())
-			}
-			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location()), nil
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("invalid date format: %s", dateStr)
-}
-
 func filterByQuery(tasks []models.Task, query string) []models.Task {
 	query = strings.ToLower(query)
 	var filtered []models.Task
 
 	for _, task := range tasks {
 		if strings.Contains(strings.ToLower(task.Name), query) ||
-		strings.Contains(strings.ToLower(task.Tag), query) ||
-		strings.Contains(strings.ToLower(task.Project), query) ||
-		strings.Contains(strings.ToLower(task.Note), query) {
+			strings.Contains(strings.ToLower(task.Tag), query) ||
+			strings.Contains(strings.ToLower(task.Project), query) ||
+			strings.Contains(strings.ToLower(task.Note), query) {
 			filtered = append(filtered, task)
 		}
 	}
