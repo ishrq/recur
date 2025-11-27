@@ -13,10 +13,8 @@ import (
 )
 
 const (
-	defaultTimeHour    = 12
-	defaultTimeMinute  = 0
-	idColumnWidth      = 4
-	dueDateColumnWidth = 15
+	defaultTimeHour   = 12
+	defaultTimeMinute = 0
 )
 
 // ANSI color codes
@@ -96,31 +94,30 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 	if len(overdue) > 0 {
 		fmt.Printf("%s%sOVERDUE (%d)%s\n", color(Bold), color(Red), len(overdue), color(Reset))
 		printTaskList(overdue, showNote, today)
-		fmt.Println()
 	}
 
 	if len(todayTasks) > 0 {
+		fmt.Println()
 		fmt.Printf("%s%sTODAY (%d)%s\n", color(Bold), color(Green), len(todayTasks), color(Reset))
 		printTaskList(todayTasks, showNote, today)
-		fmt.Println()
 	}
 
 	if len(tomorrowTasks) > 0 {
+		fmt.Println()
 		fmt.Printf("%s%sTOMORROW (%d)%s\n", color(Bold), color(Yellow), len(tomorrowTasks), color(Reset))
 		printTaskList(tomorrowTasks, showNote, today)
-		fmt.Println()
 	}
 
 	if len(upcoming) > 0 {
+		fmt.Println()
 		fmt.Printf("%sUPCOMING (%d)%s\n", color(Bold), len(upcoming), color(Reset))
 		printTaskList(upcoming, showNote, today)
-		fmt.Println()
 	}
 
 	if len(noDueDate) > 0 {
+		fmt.Println()
 		fmt.Printf("%sNO DUES (%d)%s\n", color(Bold), len(noDueDate), color(Reset))
 		printTaskList(noDueDate, showNote, today)
-		fmt.Println()
 	}
 
 	if len(allTasks) == 0 {
@@ -265,54 +262,86 @@ func printTasks(tasks []models.Task, showNote bool) {
 
 	fmt.Println()
 	printTaskList(tasks, showNote, today)
-	fmt.Println()
 }
 
 func printTaskList(tasks []models.Task, showNote bool, today time.Time) {
+	if len(tasks) == 0 {
+		return
+	}
+
+	// Calculate dynamic column widths
+	maxIDWidth := 2 // Minimum for "#1"
+	maxDateWidth := 0
+
+	for _, task := range tasks {
+		idLen := len(fmt.Sprintf("#%d", task.ID))
+		if idLen > maxIDWidth {
+			maxIDWidth = idLen
+		}
+
+		dateStr, recurStr := formatDueDateCompact(task.DueDate, task.RecurFrequency, today)
+		dateLen := len(dateStr)
+		if recurStr != "" {
+			if dateLen > 0 {
+				dateLen += len(recurStr) + 2 // +2 for "  " spaces
+			} else {
+				dateLen = len(recurStr)
+			}
+		}
+		if dateLen > maxDateWidth {
+			maxDateWidth = dateLen
+		}
+	}
+
+	// Add padding
+	idColWidth := maxIDWidth + 1
+	dateColWidth := maxDateWidth
+
 	fmt.Println(strings.Repeat("─", 5))
 
 	for _, task := range tasks {
-		// First line: ID, Due Date, Task Name
+		// First line: ID, Due Date + Recurring, Task Name
 		idStr := fmt.Sprintf("#%d", task.ID)
 
 		// Add note indicator to task name
-		taskName := color(Bold) + task.Name
+		taskName := color(Bold) + task.Name + color(Reset)
 		if task.Note != "" && !showNote {
 			taskName += color(Red) + "*" + color(Reset)
 		}
 
 		dueDateStr, recurStr := formatDueDateCompact(task.DueDate, task.RecurFrequency, today)
 
-		// Dim ID, normal date, normal task name
-		fmt.Printf("%s%-*s%s %-*s %s\n",
-			color(Dim), idColumnWidth, idStr, color(Reset),
-			dueDateColumnWidth, dueDateStr,
+		// Build date + recurring field
+		dateField := dueDateStr
+		if recurStr != "" {
+			if dateField != "" {
+				dateField += "  " + recurStr
+			} else {
+				dateField = recurStr
+			}
+		}
+
+		// Print first line
+		fmt.Printf("%s%-*s%s %-*s  %s\n",
+			color(Dim), idColWidth, idStr, color(Reset),
+			dateColWidth, dateField,
 			taskName)
 
-		// Second line: Recurrence (if on separate line) and/or Metadata
-		hasRecurLine := recurStr != "" && dueDateStr == ""
+		// Second line: Metadata
 		metadata := formatMetadata(task)
-
-		if hasRecurLine && metadata != "" {
-			fmt.Printf("%-*s %-*s   %s%s%s\n",
-				idColumnWidth, "",
-				dueDateColumnWidth, recurStr,
-				color(Dim), metadata, color(Reset))
-		} else if hasRecurLine {
-			fmt.Printf("%-*s %s\n", idColumnWidth, "", recurStr)
-		} else if metadata != "" {
-			fmt.Printf("%-*s %-*s   %s%s%s\n",
-				idColumnWidth, "",
-				dueDateColumnWidth, "",
+		if metadata != "" {
+			fmt.Printf("%-*s %-*s  %s%s%s\n",
+				idColWidth, "",
+				dateColWidth, "",
 				color(Dim), metadata, color(Reset))
 		}
 
 		// Third line: Note (if --note flag is set)
 		if showNote && task.Note != "" {
-			fmt.Printf("%-*s %-*s   %s%s*%s%s\n",
-				idColumnWidth, "",
-				dueDateColumnWidth, "",
-				color(Red),
+			fmt.Printf("%-*s %-*s  %s*%s %s%s%s\n",
+				idColWidth, "",
+				dateColWidth, "",
+				color(Red), color(Reset),
 				color(Dim), task.Note, color(Reset))
 		}
 	}
@@ -321,71 +350,47 @@ func printTaskList(tasks []models.Task, showNote bool, today time.Time) {
 // formatDueDateCompact formats the due date according to display rules
 // Returns: (dueDateStr, recurStr)
 func formatDueDateCompact(dueDate *time.Time, recurFreq string, today time.Time) (string, string) {
-	if dueDate == nil {
-		// No due date - return recurring on separate line if exists
-		if recurFreq != "" {
-			return "", formatRecurrence(recurFreq)
-		}
-		return "", ""
-	}
-
-	taskDate := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, dueDate.Location())
-	tomorrow := today.AddDate(0, 0, 1)
-
-	hasDefaultTime := isDefaultTime(*dueDate)
 	recurIndicator := ""
 	if recurFreq != "" {
 		recurIndicator = formatRecurrence(recurFreq)
 	}
 
-	// Today - show date for consistency in dashboard
-	if taskDate.Equal(today) {
+	if dueDate == nil {
+		return "", recurIndicator
+	}
+
+	currentYear := today.Year()
+	currentMonth := today.Month()
+
+	hasDefaultTime := isDefaultTime(*dueDate)
+
+	// Format with day of week
+	var dateStr string
+
+	// Same month and year: just day of week and day
+	if dueDate.Year() == currentYear && dueDate.Month() == currentMonth {
 		if hasDefaultTime {
-			dateStr := dueDate.Format("Jan 02")
-			if recurIndicator != "" {
-				return dateStr, recurIndicator
-			}
-			return dateStr, ""
+			dateStr = dueDate.Format("Mon 02")
+		} else {
+			dateStr = dueDate.Format("Mon 02 15:04")
 		}
-		// Today with custom time
-		dateStr := dueDate.Format("Jan 02 15:04")
-		return dateStr, recurIndicator
-	}
-
-	// Tomorrow - show date for consistency
-	if taskDate.Equal(tomorrow) {
+	} else if dueDate.Year() == currentYear {
+		// Same year but different month: include month
 		if hasDefaultTime {
-			dateStr := dueDate.Format("Jan 02")
-			if recurIndicator != "" {
-				return dateStr, recurIndicator
-			}
-			return dateStr, ""
+			dateStr = dueDate.Format("Mon 02 Jan")
+		} else {
+			dateStr = dueDate.Format("Mon 02 Jan 15:04")
 		}
-		dateStr := dueDate.Format("Jan 02 15:04")
-		return dateStr, recurIndicator
+	} else {
+		// Different year: include full year
+		if hasDefaultTime {
+			dateStr = dueDate.Format("Mon 02 Jan 2006")
+		} else {
+			// With time AND different year
+			dateStr = dueDate.Format("Mon 02 Jan 2006 15:04")
+		}
 	}
 
-	// Overdue
-	if taskDate.Before(today) {
-		dateStr := dueDate.Format("Jan 02")
-		// Add time if not default
-		if !hasDefaultTime {
-			dateStr = dueDate.Format("Jan 02 15:04")
-		}
-		return dateStr, recurIndicator
-	}
-
-	// Future dates
-	if hasDefaultTime {
-		dateStr := dueDate.Format("Jan 02")
-		if recurIndicator != "" {
-			return dateStr, recurIndicator
-		}
-		return dateStr, ""
-	}
-
-	// Future with time
-	dateStr := dueDate.Format("Jan 02 15:04")
 	return dateStr, recurIndicator
 }
 
@@ -397,15 +402,15 @@ func formatRecurrence(freq string) string {
 	// Handle semantic frequencies
 	switch strings.ToLower(freq) {
 	case "hourly":
-		return "↻ H"
+		return "↻H"
 	case "daily":
-		return "↻ D"
+		return "↻D"
 	case "weekly":
-		return "↻ W"
+		return "↻W"
 	case "monthly":
-		return "↻ M"
+		return "↻M"
 	case "yearly":
-		return "↻ Y"
+		return "↻Y"
 	}
 
 	// Handle numeric frequencies: 1d, 2w, 3m, etc.
@@ -424,13 +429,13 @@ func formatRecurrence(freq string) string {
 
 		if unitSymbol, ok := unitMap[unit]; ok {
 			if numPart == "1" {
-				return "↻ " + unitSymbol
+				return "↻" + unitSymbol
 			}
-			return "↻ " + numPart + unitSymbol
+			return "↻" + numPart + unitSymbol
 		}
 	}
 
-	return "↻ " + freq
+	return "↻" + freq
 }
 
 func formatMetadata(task models.Task) string {
