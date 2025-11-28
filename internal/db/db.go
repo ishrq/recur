@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
-
 	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/ishrq/recur/internal/models"
 )
 
@@ -15,12 +13,10 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err := createTables(db); err != nil {
 		db.Close()
 		return nil, err
 	}
-
 	return db, nil
 }
 
@@ -41,7 +37,6 @@ func createTables(db *sql.DB) error {
 		recur_frequency TEXT,
 		recur_end_date DATETIME
 	);
-
 	CREATE INDEX IF NOT EXISTS idx_due_date ON tasks(due_date);
 	CREATE INDEX IF NOT EXISTS idx_tag ON tasks(tag);
 	CREATE INDEX IF NOT EXISTS idx_project ON tasks(project);
@@ -49,7 +44,6 @@ func createTables(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_deleted ON tasks(deleted);
 	CREATE INDEX IF NOT EXISTS idx_recur_frequency ON tasks(recur_frequency);
 	`
-
 	_, err := db.Exec(schema)
 	return err
 }

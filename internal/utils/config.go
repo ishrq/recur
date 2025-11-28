@@ -19,6 +19,15 @@ func GetConfigDir() (string, error) {
     return configDir, nil
 }
 
+func GetDataDir() (string, error) {
+    home, err := os.UserHomeDir()
+    if err != nil {
+        return "", err
+    }
+    dataDir := filepath.Join(home, ".local", "share", "recur")
+    return dataDir, nil
+}
+
 func EnsureConfigDir() error {
     configDir, err := GetConfigDir()
     if err != nil {
@@ -27,10 +36,18 @@ func EnsureConfigDir() error {
     return os.MkdirAll(configDir, 0755)
 }
 
+func EnsureDataDir() error {
+    dataDir, err := GetDataDir()
+    if err != nil {
+        return err
+    }
+    return os.MkdirAll(dataDir, 0755)
+}
+
 func GetDefaultConfig() *Config {
-    configDir, _ := GetConfigDir()
+    dataDir, _ := GetDataDir()
     return &Config{
-        DBPath:          filepath.Join(configDir, "tasks.db"),
+        DBPath:          filepath.Join(dataDir, "recur.db"),
         DefaultTaskTime: "12:00",
     }
 }
