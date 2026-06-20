@@ -148,7 +148,7 @@ func handleRecurringTask(database *sql.DB, task *models.Task) error {
 		return fmt.Errorf("failed to insert next task: %w", err)
 	}
 
-	fmt.Printf("  → Created next occurrence #%d (due %s)\n", newID, nextDueDate.Format("Mon Jan 2, 15:04"))
+	fmt.Printf("  → Created next occurrence #%d (due %s)\n", newID, nextDueDate.Local().Format("Mon Jan 2, 15:04"))
 
 	return nil
 }

@@ -48,6 +48,14 @@ func createTables(db *sql.DB) error {
 	return err
 }
 
+func toUTC(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	utc := t.UTC()
+	return &utc
+}
+
 func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 	query := `
 		INSERT INTO tasks (name, due_date, created_date, completed_date, tag, project, priority, note, last_task_id, recur_frequency, recur_end_date)
@@ -56,16 +64,16 @@ func InsertTask(db *sql.DB, task *models.Task) (int64, error) {
 
 	result, err := db.Exec(query,
 		task.Name,
-		task.DueDate,
-		task.CreatedDate,
-		task.CompletedDate,
+		toUTC(task.DueDate),
+		task.CreatedDate.UTC(),
+		toUTC(task.CompletedDate),
 		task.Tag,
 		task.Project,
 		task.Priority,
 		task.Note,
 		task.LastTaskID,
 		task.RecurFrequency,
-		task.RecurEndDate,
+		toUTC(task.RecurEndDate),
 	)
 
 	if err != nil {
@@ -222,15 +230,15 @@ func UpdateTask(db *sql.DB, task *models.Task) error {
 
 	result, err := db.Exec(query,
 		task.Name,
-		task.DueDate,
+		toUTC(task.DueDate),
 		task.Tag,
 		task.Project,
 		task.Priority,
 		task.Note,
 		task.LastTaskID,
 		task.RecurFrequency,
-		task.RecurEndDate,
-		task.CompletedDate,
+		toUTC(task.RecurEndDate),
+		toUTC(task.CompletedDate),
 		boolToInt(task.Deleted),
 		task.ID,
 	)

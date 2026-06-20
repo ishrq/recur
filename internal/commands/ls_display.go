@@ -77,7 +77,8 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 			continue
 		}
 
-		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
+		local := task.DueDate.Local()
+		taskDate := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, now.Location())
 
 		if taskDate.Before(today) {
 			overdue = append(overdue, task)
@@ -318,35 +319,36 @@ func formatDueDateCompact(dueDate *time.Time, recurFreq string, today time.Time)
 		return "", recurIndicator
 	}
 
+	localDueDate := dueDate.Local()
 	currentYear := today.Year()
 	currentMonth := today.Month()
 
-	hasDefaultTime := isDefaultTime(*dueDate)
+	hasDefaultTime := isDefaultTime(localDueDate)
 
 	// Format with day of week
 	var dateStr string
 
 	// Same month and year: just day of week and day
-	if dueDate.Year() == currentYear && dueDate.Month() == currentMonth {
+	if localDueDate.Year() == currentYear && localDueDate.Month() == currentMonth {
 		if hasDefaultTime {
-			dateStr = dueDate.Format("Mon 02")
+			dateStr = localDueDate.Format("Mon 02")
 		} else {
-			dateStr = dueDate.Format("Mon 02 15:04")
+			dateStr = localDueDate.Format("Mon 02 15:04")
 		}
-	} else if dueDate.Year() == currentYear {
+	} else if localDueDate.Year() == currentYear {
 		// Same year but different month: include month
 		if hasDefaultTime {
-			dateStr = dueDate.Format("Mon 02 Jan")
+			dateStr = localDueDate.Format("Mon 02 Jan")
 		} else {
-			dateStr = dueDate.Format("Mon 02 Jan 15:04")
+			dateStr = localDueDate.Format("Mon 02 Jan 15:04")
 		}
 	} else {
 		// Different year: include full year
 		if hasDefaultTime {
-			dateStr = dueDate.Format("Mon 02 Jan 2006")
+			dateStr = localDueDate.Format("Mon 02 Jan 2006")
 		} else {
 			// With time AND different year
-			dateStr = dueDate.Format("Mon 02 Jan 2006 15:04")
+			dateStr = localDueDate.Format("Mon 02 Jan 2006 15:04")
 		}
 	}
 

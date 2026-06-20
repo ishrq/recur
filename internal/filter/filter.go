@@ -50,7 +50,8 @@ func ApplyFilters(tasks []models.Task, filters Filters) ([]models.Task, error) {
 				continue
 			}
 
-			taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, now.Location())
+			local := task.DueDate.Local()
+			taskDate := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, now.Location())
 
 			if filters.Overdue && taskDate.Before(today) {
 				dateFiltered = append(dateFiltered, task)
@@ -148,7 +149,8 @@ func filterByDateRange(tasks []models.Task, fromDateStr, toDateStr string) ([]mo
 			continue
 		}
 
-		taskDate := time.Date(task.DueDate.Year(), task.DueDate.Month(), task.DueDate.Day(), 0, 0, 0, 0, task.DueDate.Location())
+		local := task.DueDate.Local()
+		taskDate := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
 
 		if fromRange != nil && taskDate.Before(fromRange.Start) {
 			continue
