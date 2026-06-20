@@ -39,13 +39,10 @@ func Done(database *sql.DB, args []string) error {
 		}
 	}
 
-	if undo {
-		return undoCompleteTasks(database, ids, filters)
-	}
-	return completeTasks(database, ids, filters)
+	return completeTasks(database, ids, filters, undo)
 }
 
-func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) error {
+func completeTasks(database *sql.DB, ids []int, filters filter.Filters, undo bool) error {
 	var tasks []models.Task
 	var err error
 
@@ -56,8 +53,12 @@ func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) erro
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
-			if task.CompletedDate == nil {
+			if undo && task.CompletedDate == nil {
 				fmt.Printf("Warning: Task #%d is not completed\n", id)
+				continue
+			}
+			if !undo && task.CompletedDate != nil {
+				fmt.Printf("Task #%d already completed\n", id)
 				continue
 			}
 			if task.Deleted {
@@ -67,7 +68,7 @@ func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) erro
 			tasks = append(tasks, *task)
 		}
 	} else {
-		tasks, err = db.GetTasks(database, false, true)
+		tasks, err = db.GetTasks(database, false, undo)
 		if err != nil {
 			return fmt.Errorf("failed to get tasks: %w", err)
 		}
@@ -78,71 +79,21 @@ func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) erro
 	}
 
 	if len(tasks) == 0 {
-		return fmt.Errorf("no completed tasks found matching criteria")
-	}
-
-	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d completed task(s) to unmark:", len(tasks)), fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks)))
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil
-	}
-
-	unmarked := 0
-	for _, task := range tasks {
-		if err := db.UndoCompleteTask(database, task.ID); err != nil {
-			fmt.Printf("Warning: Failed to unmark task #%d: %v\n", task.ID, err)
-			continue
+		if undo {
+			return fmt.Errorf("no completed tasks found matching criteria")
 		}
-		fmt.Printf("↺ Unmarked #%d: %s\n", task.ID, task.Name)
-		unmarked++
-	}
-
-	if unmarked > 0 {
-		fmt.Printf("\n%d task(s) unmarked as incomplete\n", unmarked)
-	}
-
-	return nil
-}
-
-func completeTasks(database *sql.DB, ids []int, filters filter.Filters) error {
-	var tasks []models.Task
-	var err error
-
-	if len(ids) > 0 {
-		for _, id := range ids {
-			task, err := db.GetTaskByID(database, id)
-			if err != nil {
-				fmt.Printf("Warning: Task #%d not found\n", id)
-				continue
-			}
-			if task.CompletedDate != nil {
-				fmt.Printf("Task #%d already completed\n", id)
-				continue
-			}
-			if task.Deleted {
-				fmt.Printf("Task #%d is deleted\n", id)
-				continue
-			}
-			tasks = append(tasks, *task)
-		}
-	} else {
-		tasks, err = db.GetTasks(database, false, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-		tasks, err = filter.ApplyFilters(tasks, filters)
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(tasks) == 0 {
 		return fmt.Errorf("no tasks found matching criteria")
 	}
 
-	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d task(s) to complete:", len(tasks)), fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks)))
+	var title, prompt string
+	if undo {
+		title = fmt.Sprintf("Found %d completed task(s) to unmark:", len(tasks))
+		prompt = fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks))
+	} else {
+		title = fmt.Sprintf("Found %d task(s) to complete:", len(tasks))
+		prompt = fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks))
+	}
+	ok, err := confirmTasks(tasks, title, prompt)
 	if err != nil {
 		return err
 	}
@@ -150,23 +101,36 @@ func completeTasks(database *sql.DB, ids []int, filters filter.Filters) error {
 		return nil
 	}
 
-	completed := 0
+	var count int
 	for _, task := range tasks {
-		if task.RecurFrequency != "" {
-			if err := handleRecurringTask(database, &task); err != nil {
-				fmt.Printf("Warning: Failed to create next occurrence for task #%d: %v\n", task.ID, err)
+		if undo {
+			if err := db.UndoCompleteTask(database, task.ID); err != nil {
+				fmt.Printf("Warning: Failed to unmark task #%d: %v\n", task.ID, err)
+				continue
 			}
+			fmt.Printf("↺ Unmarked #%d: %s\n", task.ID, task.Name)
+			count++
+		} else {
+			if task.RecurFrequency != "" {
+				if err := handleRecurringTask(database, &task); err != nil {
+					fmt.Printf("Warning: Failed to create next occurrence for task #%d: %v\n", task.ID, err)
+				}
+			}
+			if err := db.MarkTaskDone(database, task.ID); err != nil {
+				fmt.Printf("Warning: Failed to complete task #%d: %v\n", task.ID, err)
+				continue
+			}
+			fmt.Printf("✓ Completed #%d: %s\n", task.ID, task.Name)
+			count++
 		}
-		if err := db.MarkTaskDone(database, task.ID); err != nil {
-			fmt.Printf("Warning: Failed to complete task #%d: %v\n", task.ID, err)
-			continue
-		}
-		fmt.Printf("✓ Completed #%d: %s\n", task.ID, task.Name)
-		completed++
 	}
 
-	if completed > 0 {
-		fmt.Printf("\n%d task(s) completed\n", completed)
+	if count > 0 {
+		if undo {
+			fmt.Printf("\n%d task(s) unmarked as incomplete\n", count)
+		} else {
+			fmt.Printf("\n%d task(s) completed\n", count)
+		}
 	}
 
 	return nil
