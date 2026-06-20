@@ -128,132 +128,74 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 	return nil
 }
 
-func displayTags(database *sql.DB) error {
+func displayCounts(database *sql.DB, fieldFn func(*models.Task) string, prefix, label string, lessFn func(a, b string) bool) error {
 	tasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
 	}
 
-	tagCounts := make(map[string]int)
+	counts := make(map[string]int)
 	for _, task := range tasks {
-		if task.Tag != "" {
-			tagCounts[task.Tag]++
+		if v := fieldFn(&task); v != "" {
+			counts[v]++
 		}
 	}
 
-	if len(tagCounts) == 0 {
-		fmt.Println("No tags found.")
+	if len(counts) == 0 {
+		fmt.Printf("No %s found.\n", strings.ToLower(label))
 		return nil
 	}
 
-	tags := make([]string, 0, len(tagCounts))
-	for tag := range tagCounts {
-		tags = append(tags, tag)
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
 	}
-	sort.Strings(tags)
+
+	if lessFn != nil {
+		sort.Slice(keys, func(i, j int) bool { return lessFn(keys[i], keys[j]) })
+	} else {
+		sort.Strings(keys)
+	}
 
 	fmt.Println()
-	fmt.Println("Tags:")
+	fmt.Printf("%s:\n", label)
 	fmt.Println()
-	for _, tag := range tags {
-		fmt.Printf("  #%-20s (%d)\n", tag, tagCounts[tag])
+	for _, k := range keys {
+		fmt.Printf("  %s%-20s (%d)\n", prefix, k, counts[k])
 	}
 	fmt.Println()
-	fmt.Printf("Total: %d tags\n", len(tags))
+	fmt.Printf("Total: %d %s\n", len(keys), strings.ToLower(label))
 
 	return nil
+}
+
+func displayTags(database *sql.DB) error {
+	return displayCounts(database, func(t *models.Task) string { return t.Tag }, "#", "Tags", nil)
 }
 
 func displayProjects(database *sql.DB) error {
-	tasks, err := db.GetTasks(database, false, false)
-	if err != nil {
-		return fmt.Errorf("failed to get tasks: %w", err)
-	}
+	return displayCounts(database, func(t *models.Task) string { return t.Project }, "+", "Projects", nil)
+}
 
-	projectCounts := make(map[string]int)
-	for _, task := range tasks {
-		if task.Project != "" {
-			projectCounts[task.Project]++
-		}
-	}
+func priorityLess(a, b string) bool {
+	order := map[string]int{"urgent": 1, "high": 2}
+	aOrder, aOk := order[strings.ToLower(a)]
+	bOrder, bOk := order[strings.ToLower(b)]
 
-	if len(projectCounts) == 0 {
-		fmt.Println("No projects found.")
-		return nil
+	if aOk && bOk {
+		return aOrder < bOrder
 	}
-
-	projects := make([]string, 0, len(projectCounts))
-	for project := range projectCounts {
-		projects = append(projects, project)
+	if aOk {
+		return true
 	}
-	sort.Strings(projects)
-
-	fmt.Println()
-	fmt.Println("Projects:")
-	fmt.Println()
-	for _, project := range projects {
-		fmt.Printf("  +%-20s (%d)\n", project, projectCounts[project])
+	if bOk {
+		return false
 	}
-	fmt.Println()
-	fmt.Printf("Total: %d projects\n", len(projects))
-
-	return nil
+	return a < b
 }
 
 func displayPriorities(database *sql.DB) error {
-	tasks, err := db.GetTasks(database, false, false)
-	if err != nil {
-		return fmt.Errorf("failed to get tasks: %w", err)
-	}
-
-	priorityCounts := make(map[string]int)
-	for _, task := range tasks {
-		if task.Priority != "" {
-			priorityCounts[task.Priority]++
-		}
-	}
-
-	if len(priorityCounts) == 0 {
-		fmt.Println("No priorities found.")
-		return nil
-	}
-
-	priorities := make([]string, 0, len(priorityCounts))
-	for priority := range priorityCounts {
-		priorities = append(priorities, priority)
-	}
-
-	sort.Slice(priorities, func(i, j int) bool {
-		order := map[string]int{
-			"urgent": 1,
-			"high":   2,
-		}
-
-		iOrder, iExists := order[strings.ToLower(priorities[i])]
-		jOrder, jExists := order[strings.ToLower(priorities[j])]
-
-		if iExists && jExists {
-			return iOrder < jOrder
-		}
-		if iExists {
-			return true
-		}
-		if jExists {
-			return false
-		}
-		return priorities[i] < priorities[j]
-	})
-
-	fmt.Println()
-	fmt.Println("Priorities:")
-	fmt.Println()
-	for _, priority := range priorities {
-		fmt.Printf("  !%-20s (%d)\n", priority, priorityCounts[priority])
-	}
-	fmt.Println()
-	fmt.Printf("Total: %d priorities\n", len(priorities))
-
-	return nil
+	return displayCounts(database, func(t *models.Task) string { return t.Priority }, "!", "Priorities", priorityLess)
 }
 
 func printTasks(tasks []models.Task, showNote bool) {
