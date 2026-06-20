@@ -235,7 +235,7 @@ func parseRelativeDate(input string, now time.Time) (*ParsedDate, bool) {
 
 // parseYearOnly handles: 2025
 func parseYearOnly(input string, loc *time.Location) (*ParsedDate, bool) {
-	re := regexp.MustCompile(`^(20\d{2})$`)
+	re := regexp.MustCompile(`^(\d{4})$`)
 	matches := re.FindStringSubmatch(input)
 
 	if len(matches) != 2 {
