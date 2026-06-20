@@ -18,6 +18,8 @@ func List(database *sql.DB, args []string) error {
 		}
 	}
 
+	filters, remaining := extractFilterFlags(args)
+
 	var showAll bool
 	var showDone bool
 	var showTrash bool
@@ -28,10 +30,8 @@ func List(database *sql.DB, args []string) error {
 	var exportPath string
 	var exportFlag bool
 
-	filters := filter.Filters{}
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
+	for i := 0; i < len(remaining); i++ {
+		arg := remaining[i]
 		switch arg {
 		case "--all", "-a":
 			showAll = true
@@ -39,34 +39,6 @@ func List(database *sql.DB, args []string) error {
 			showDone = true
 		case "--trash":
 			showTrash = true
-		case "--today":
-			filters.Today = true
-		case "--tomorrow":
-			filters.Tomorrow = true
-		case "--overdue":
-			filters.Overdue = true
-		case "--upcoming":
-			filters.Upcoming = true
-		case "--due", "-d":
-			if i+1 < len(args) {
-				filters.DueDate = args[i+1]
-				i++
-			}
-		case "--from":
-			if i+1 < len(args) {
-				filters.FromDate = args[i+1]
-				i++
-			}
-		case "--to":
-			if i+1 < len(args) {
-				filters.ToDate = args[i+1]
-				i++
-			}
-		case "--query", "-q":
-			if i+1 < len(args) {
-				filters.Query = args[i+1]
-				i++
-			}
 		case "--tags":
 			listTags = true
 		case "--projects":
@@ -77,23 +49,8 @@ func List(database *sql.DB, args []string) error {
 			showNote = true
 		case "--export":
 			exportFlag = true
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				exportPath = args[i+1]
-				i++
-			}
-		case "--tag", "-t":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Tags = append(filters.Tags, args[i+1])
-				i++
-			}
-		case "--project", "-p":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Projects = append(filters.Projects, args[i+1])
-				i++
-			}
-		case "--priority", "-P":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Priorities = append(filters.Priorities, args[i+1])
+			if i+1 < len(remaining) && !strings.HasPrefix(remaining[i+1], "-") {
+				exportPath = remaining[i+1]
 				i++
 			}
 		}

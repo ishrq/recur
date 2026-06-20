@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/ishrq/recur/internal/commands"
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/utils"
+	"os"
 )
 
 func main() {

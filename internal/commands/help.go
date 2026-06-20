@@ -164,7 +164,7 @@ func PrintHelp(command string) {
 				"recur ls --priority <pri>   Show tasks with specific priority",
 				"recur ls --query <keyword>  Search tasks by keyword",
 				"recur ls --note             Include notes in task list",
-				"recur ls --export [path]    Export filtered tasks to CSV",  // ADD THIS LINE
+				"recur ls --export [path]    Export filtered tasks to CSV", // ADD THIS LINE
 			},
 			Options: []Option{
 				{"-a, --all", "Show all tasks (completed and incomplete)"},
@@ -185,7 +185,7 @@ func PrintHelp(command string) {
 				{"-P, --priority <pri>", "Filter by priority (can specify multiple)"},
 				{"-q, --query <keyword>", "Search in task name, tag, project, and note"},
 				{"-n, --note", "Include notes in task list"},
-				{"--export [path]", "Export to CSV (auto-generates filename if not provided)"},  // ADD THIS LINE
+				{"--export [path]", "Export to CSV (auto-generates filename if not provided)"}, // ADD THIS LINE
 				{"-h, --help", "Show this help message"},
 			},
 			Examples: []string{

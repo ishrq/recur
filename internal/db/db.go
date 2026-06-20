@@ -3,9 +3,9 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"time"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/ishrq/recur/internal/models"
+	_ "github.com/mattn/go-sqlite3"
+	"time"
 )
 
 func InitDB(dbPath string) (*sql.DB, error) {

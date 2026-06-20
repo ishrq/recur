@@ -1,8 +1,8 @@
 package integration
 
 import (
-	"testing"
 	"github.com/ishrq/recur/internal/db"
+	"testing"
 )
 
 func TestRemoveCommand_SingleTask(t *testing.T) {

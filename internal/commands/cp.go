@@ -26,67 +26,22 @@ func Copy(database *sql.DB, args []string) error {
 		return nil
 	}
 
-	// Parse flags and IDs
+	filters, remaining := extractFilterFlags(args)
+
 	var ids []int
 	var modifyStr string
 	var useEditor bool
-	filters := filter.Filters{}
 	foundModifyStr := false
 
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
+	for i := 0; i < len(remaining); i++ {
+		arg := remaining[i]
 		switch arg {
 		case "--edit", "-e":
 			useEditor = true
-		case "--today":
-			filters.Today = true
-		case "--tomorrow":
-			filters.Tomorrow = true
-		case "--overdue":
-			filters.Overdue = true
-		case "--upcoming":
-			filters.Upcoming = true
-		case "--due", "-d":
-			if i+1 < len(args) {
-				filters.DueDate = args[i+1]
-				i++
-			}
-		case "--from":
-			if i+1 < len(args) {
-				filters.FromDate = args[i+1]
-				i++
-			}
-		case "--to":
-			if i+1 < len(args) {
-				filters.ToDate = args[i+1]
-				i++
-			}
-		case "--query", "-q":
-			if i+1 < len(args) {
-				filters.Query = args[i+1]
-				i++
-			}
-		case "--tag", "-t":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Tags = append(filters.Tags, args[i+1])
-				i++
-			}
-		case "--project", "-p":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Projects = append(filters.Projects, args[i+1])
-				i++
-			}
-		case "--priority", "-P":
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				filters.Priorities = append(filters.Priorities, args[i+1])
-				i++
-			}
 		default:
-			// Try to parse as ID
 			id, err := strconv.Atoi(arg)
 			if err != nil {
-				// Not an ID, must be the modification string
-				modifyStr = strings.Join(args[i:], " ")
+				modifyStr = strings.Join(remaining[i:], " ")
 				foundModifyStr = true
 				break
 			}
