@@ -88,15 +88,12 @@ func addWithEditor(database *sql.DB, initialContent string) error {
 			for i, task := range tasks {
 				fmt.Printf("%d. %s\n", i+1, task.Name)
 			}
-			fmt.Printf("\nAdd these %d tasks? (y/n): ", len(tasks))
-			reader := bufio.NewReader(os.Stdin)
-			response, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
 
-			response = strings.TrimSpace(strings.ToLower(response))
-			if response != "y" && response != "yes" {
+			ok, err := confirmPrompt(fmt.Sprintf("\nAdd these %d tasks? (y/n): ", len(tasks)))
+			if err != nil {
+				return err
+			}
+			if !ok {
 				fmt.Println("Operation cancelled.")
 				return nil
 			}

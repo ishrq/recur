@@ -115,16 +115,11 @@ func duplicateTasksInPlace(database *sql.DB, tasks []models.Task) error {
 	}
 	fmt.Println()
 
-	// Ask for confirmation
-	fmt.Printf("Duplicate these %d task(s)? (y/n): ", len(tasks))
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+	ok, err := confirmPrompt(fmt.Sprintf("Duplicate these %d task(s)? (y/n): ", len(tasks)))
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return err
 	}
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response != "y" && response != "yes" {
+	if !ok {
 		fmt.Println("Operation cancelled.")
 		return nil
 	}
@@ -168,16 +163,11 @@ func copyWithModifications(database *sql.DB, tasks []models.Task, modifyStr stri
 	}
 	fmt.Println()
 
-	// Ask for confirmation
-	fmt.Printf("Copy these %d task(s) with modifications? (y/n): ", len(tasks))
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+	ok, err := confirmPrompt(fmt.Sprintf("Copy these %d task(s) with modifications? (y/n): ", len(tasks)))
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return err
 	}
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response != "y" && response != "yes" {
+	if !ok {
 		fmt.Println("Operation cancelled.")
 		return nil
 	}

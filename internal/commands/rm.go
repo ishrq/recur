@@ -1,12 +1,9 @@
 package commands
 
 import (
-	"bufio"
 	"database/sql"
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/filter"
@@ -53,7 +50,6 @@ func Remove(database *sql.DB, args []string) error {
 		}
 	}
 
-	// Check for conflicting flags
 	if undo {
 		if removeAll || removeDone || removeTrash || purge {
 			return fmt.Errorf("--undo cannot be combined with --all, --done, --trash, or --purge")
@@ -67,237 +63,202 @@ func Remove(database *sql.DB, args []string) error {
 			specialFlagCount++
 		}
 	}
-
 	if specialFlagCount > 1 {
 		return fmt.Errorf("cannot combine --all, --done, --trash, and --purge flags")
 	}
 
-	if purge {
-		count, err := db.GetAllTasksCount(database)
-		if err != nil {
-			return fmt.Errorf("failed to count tasks: %w", err)
-		}
+	switch {
+	case purge:
+		return purgeAllTasks(database)
+	case undo:
+		return restoreDeletedTasks(database, ids, filters)
+	default:
+		return removeTasks(database, ids, filters, removeAll, removeDone, removeTrash)
+	}
+}
 
-		if count == 0 {
-			fmt.Println("No tasks in database.")
-			return nil
-		}
+func purgeAllTasks(database *sql.DB) error {
+	count, err := db.GetAllTasksCount(database)
+	if err != nil {
+		return fmt.Errorf("failed to count tasks: %w", err)
+	}
 
-		fmt.Println("\n⚠️  WARNING: This will PERMANENTLY delete ALL tasks from the database.")
-		fmt.Println("⚠️  This action CANNOT be undone!")
-		fmt.Printf("\nTotal tasks in database: %d\n\n", count)
-		fmt.Print("Type 'DELETE ALL' to confirm: ")
-
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		response = strings.TrimSpace(response)
-		if response != "DELETE ALL" {
-			fmt.Println("Purge cancelled.")
-			return nil
-		}
-
-		if err := db.PurgeAllTasks(database); err != nil {
-			return fmt.Errorf("failed to purge tasks: %w", err)
-		}
-
-		fmt.Printf("\n✓ All tasks permanently deleted\n")
+	if count == 0 {
+		fmt.Println("No tasks in database.")
 		return nil
 	}
 
-	if undo {
-		var tasksToRestore []*models.Task
-		var initialTasks []models.Task
-		var err error
+	fmt.Println("\n⚠️  WARNING: This will PERMANENTLY delete ALL tasks from the database.")
+	fmt.Println("⚠️  This action CANNOT be undone!")
+	fmt.Printf("\nTotal tasks in database: %d\n\n", count)
 
-		if len(ids) > 0 {
-			// Get tasks by IDs and check if deleted
-			for _, id := range ids {
-				task, err := db.GetTaskByID(database, id)
-				if err != nil {
-					fmt.Printf("Warning: Task #%d not found\n", id)
-					continue
-				}
-				// Only include deleted tasks for undo
-				if task.Deleted {
-					initialTasks = append(initialTasks, *task)
-				} else {
-					fmt.Printf("Warning: Task #%d is not deleted\n", id)
-				}
-			}
-		} else {
-			// Get all deleted tasks for filtering
-			initialTasks, err = db.GetTasks(database, true, false)
-			if err != nil {
-				return fmt.Errorf("failed to get deleted tasks: %w", err)
-			}
-
-			// Apply filters
-			initialTasks, err = filter.ApplyFilters(initialTasks, filters)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Convert to tasksToRestore
-		for i := range initialTasks {
-			tasksToRestore = append(tasksToRestore, &initialTasks[i])
-		}
-
-		if len(tasksToRestore) == 0 {
-			return fmt.Errorf("no deleted tasks found matching criteria")
-		}
-
-		// Display tasks to be restored
-		fmt.Printf("\nFound %d deleted task(s) to restore:\n", len(tasksToRestore))
-		for _, t := range tasksToRestore {
-			fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-		}
-		fmt.Println()
-
-		// Ask for confirmation
-		fmt.Printf("Restore these %d task(s)? (y/n): ", len(tasksToRestore))
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		response = strings.TrimSpace(strings.ToLower(response))
-		if response != "y" && response != "yes" {
-			fmt.Println("Restore cancelled.")
-			return nil
-		}
-
-		// Restore tasks
-		restored := 0
-		for _, t := range tasksToRestore {
-			if err := db.RestoreTask(database, t.ID); err != nil {
-				fmt.Printf("Warning: Failed to restore task #%d: %v\n", t.ID, err)
-				continue
-			}
-
-			fmt.Printf("↺ Restored #%d: %s\n", t.ID, t.Name)
-			restored++
-		}
-
-		if restored > 0 {
-			fmt.Printf("\n%d task(s) restored\n", restored)
-		}
-
+	ok, err := confirmSpecific("Type 'DELETE ALL' to confirm: ", "DELETE ALL")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Println("Purge cancelled.")
 		return nil
 	}
 
-	// Collect initial task set
-	var tasksToDelete []*models.Task
-	permanentDelete := false
-	var initialTasks []models.Task
+	if err := db.PurgeAllTasks(database); err != nil {
+		return fmt.Errorf("failed to purge tasks: %w", err)
+	}
+
+	fmt.Printf("\n✓ All tasks permanently deleted\n")
+	return nil
+}
+
+func restoreDeletedTasks(database *sql.DB, ids []int, filters filter.Filters) error {
+	var tasks []models.Task
 	var err error
 
-	if removeTrash {
-		permanentDelete = true
-		initialTasks, err = db.GetTasks(database, true, false)
-		if err != nil {
-			return fmt.Errorf("failed to get deleted tasks: %w", err)
-		}
-	} else if removeAll {
-		initialTasks, err = db.GetTasks(database, false, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-	} else if removeDone {
-		initialTasks, err = db.GetTasks(database, false, true)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-	} else if len(ids) > 0 {
-		// Get tasks by IDs
+	if len(ids) > 0 {
 		for _, id := range ids {
 			task, err := db.GetTaskByID(database, id)
 			if err != nil {
 				fmt.Printf("Warning: Task #%d not found\n", id)
 				continue
 			}
-			// Skip deleted tasks for normal operations
+			if task.Deleted {
+				tasks = append(tasks, *task)
+			} else {
+				fmt.Printf("Warning: Task #%d is not deleted\n", id)
+			}
+		}
+	} else {
+		tasks, err = db.GetTasks(database, true, false)
+		if err != nil {
+			return fmt.Errorf("failed to get deleted tasks: %w", err)
+		}
+		tasks, err = filter.ApplyFilters(tasks, filters)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(tasks) == 0 {
+		return fmt.Errorf("no deleted tasks found matching criteria")
+	}
+
+	fmt.Printf("\nFound %d deleted task(s) to restore:\n", len(tasks))
+	for _, t := range tasks {
+		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
+	}
+	fmt.Println()
+
+	ok, err := confirmPrompt(fmt.Sprintf("Restore these %d task(s)? (y/n): ", len(tasks)))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Println("Restore cancelled.")
+		return nil
+	}
+
+	restored := 0
+	for _, t := range tasks {
+		if err := db.RestoreTask(database, t.ID); err != nil {
+			fmt.Printf("Warning: Failed to restore task #%d: %v\n", t.ID, err)
+			continue
+		}
+		fmt.Printf("↺ Restored #%d: %s\n", t.ID, t.Name)
+		restored++
+	}
+
+	if restored > 0 {
+		fmt.Printf("\n%d task(s) restored\n", restored)
+	}
+
+	return nil
+}
+
+func removeTasks(database *sql.DB, ids []int, filters filter.Filters, removeAll, removeDone, removeTrash bool) error {
+	var tasks []models.Task
+	var err error
+	permanentDelete := false
+
+	switch {
+	case removeTrash:
+		permanentDelete = true
+		tasks, err = db.GetTasks(database, true, false)
+	case removeAll:
+		tasks, err = db.GetTasks(database, false, false)
+	case removeDone:
+		tasks, err = db.GetTasks(database, false, true)
+	case len(ids) > 0:
+		for _, id := range ids {
+			task, err := db.GetTaskByID(database, id)
+			if err != nil {
+				fmt.Printf("Warning: Task #%d not found\n", id)
+				continue
+			}
 			if !task.Deleted {
-				initialTasks = append(initialTasks, *task)
+				tasks = append(tasks, *task)
 			} else {
 				fmt.Printf("Warning: Task #%d is already deleted\n", id)
 			}
 		}
-	} else {
-		// Get all incomplete tasks for filtering
-		initialTasks, err = db.GetTasks(database, false, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
+	default:
+		tasks, err = db.GetTasks(database, false, false)
 	}
 
-	// Apply filters
-	initialTasks, err = filter.ApplyFilters(initialTasks, filters)
+	if err != nil {
+		return fmt.Errorf("failed to get tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		return fmt.Errorf("no tasks found matching criteria")
+	}
+
+	// Apply filters to the initial task set
+	tasks, err = filter.ApplyFilters(tasks, filters)
 	if err != nil {
 		return err
 	}
 
-	// Convert to tasksToDelete
-	for i := range initialTasks {
-		tasksToDelete = append(tasksToDelete, &initialTasks[i])
-	}
-
-	if len(tasksToDelete) == 0 {
+	if len(tasks) == 0 {
 		return fmt.Errorf("no tasks found matching criteria")
 	}
 
-	// Display tasks to be deleted
 	fmt.Println()
 	if permanentDelete {
 		fmt.Println("⚠️  WARNING: This will PERMANENTLY delete tasks from the database.")
 		fmt.Println("⚠️  This action CANNOT be undone!")
 		fmt.Println()
 	}
-	fmt.Printf("Found %d task(s) to delete:\n", len(tasksToDelete))
-	for _, t := range tasksToDelete {
+	fmt.Printf("Found %d task(s) to delete:\n", len(tasks))
+	for _, t := range tasks {
 		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
 	}
 	fmt.Println()
 
-	// Ask for confirmation
+	prompt := fmt.Sprintf("Delete these %d task(s)? (y/n): ", len(tasks))
 	if permanentDelete {
-		fmt.Printf("Permanently delete these %d task(s)? (y/n): ", len(tasksToDelete))
-	} else {
-		fmt.Printf("Delete these %d task(s)? (y/n): ", len(tasksToDelete))
+		prompt = fmt.Sprintf("Permanently delete these %d task(s)? (y/n): ", len(tasks))
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+	ok, err := confirmPrompt(prompt)
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return err
 	}
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response != "y" && response != "yes" {
+	if !ok {
 		fmt.Println("Deletion cancelled.")
 		return nil
 	}
 
-	// Delete tasks
 	deleted := 0
-	for _, t := range tasksToDelete {
+	for _, t := range tasks {
 		var err error
 		if permanentDelete {
 			err = db.PermanentlyDeleteTask(database, t.ID)
 		} else {
 			err = db.DeleteTask(database, t.ID)
 		}
-
 		if err != nil {
 			fmt.Printf("Warning: Failed to delete task #%d: %v\n", t.ID, err)
 			continue
 		}
-
 		fmt.Printf("✗ Deleted #%d: %s\n", t.ID, t.Name)
 		deleted++
 	}

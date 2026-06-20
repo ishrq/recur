@@ -102,16 +102,11 @@ func Move(database *sql.DB, args []string) error {
 	}
 	fmt.Println()
 
-	// Ask for confirmation
-	fmt.Printf("Edit these %d task(s)? (y/n): ", len(tasksToEdit))
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+	ok, err := confirmPrompt(fmt.Sprintf("Edit these %d task(s)? (y/n): ", len(tasksToEdit)))
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return err
 	}
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response != "y" && response != "yes" {
+	if !ok {
 		fmt.Println("Operation cancelled.")
 		return nil
 	}

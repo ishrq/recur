@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -82,15 +81,11 @@ func exportTasksToCSV(tasks []models.Task, filename string) error {
 	}
 
 	if _, err := os.Stat(filename); err == nil {
-		fmt.Printf("File '%s' already exists. Overwrite? (y/n): ", filename)
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
+		ok, err := confirmPrompt(fmt.Sprintf("File '%s' already exists. Overwrite? (y/n): ", filename))
 		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+			return err
 		}
-
-		response = strings.TrimSpace(strings.ToLower(response))
-		if response != "y" && response != "yes" {
+		if !ok {
 			fmt.Println("Export cancelled.")
 			return nil
 		}
