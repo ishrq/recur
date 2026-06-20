@@ -5,18 +5,20 @@ import (
 	"time"
 )
 
+var fixedNow = time.Date(2026, 6, 20, 14, 30, 0, 0, time.UTC) // Saturday
+
 func parseOrFail(t *testing.T, input string) *ParsedDate {
 	t.Helper()
-	pd, err := ParseDateTime(input)
+	pd, err := ParseDateTimeWithNow(input, fixedNow)
 	if err != nil {
-		t.Fatalf("ParseDateTime(%q) unexpected error: %v", input, err)
+		t.Fatalf("ParseDateTimeWithNow(%q) fixedNow=%v: %v", input, fixedNow, err)
 	}
 	return pd
 }
 
 func expectError(t *testing.T, input string) {
 	t.Helper()
-	_, err := ParseDateTime(input)
+	_, err := ParseDateTimeWithNow(input, fixedNow)
 	if err == nil {
 		t.Fatalf("ParseDateTime(%q) expected error, got nil", input)
 	}
@@ -29,25 +31,24 @@ func isSameDay(a, b time.Time) bool {
 // --- Semantic dates ---
 
 func TestParseSemantic_Now(t *testing.T) {
-	before := time.Now()
 	pd := parseOrFail(t, "now")
-	after := time.Now()
 	if pd.Precision != PrecisionExact {
 		t.Errorf("now: expected PrecisionExact, got %v", pd.Precision)
 	}
-	if pd.Time.Before(before) || pd.Time.After(after) {
-		t.Errorf("now: time %v should be between %v and %v", pd.Time, before, after)
+	if !pd.Time.Equal(fixedNow) {
+		t.Errorf("now: expected %v, got %v", fixedNow, pd.Time)
 	}
 }
 
 func TestParseSemantic_Today(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "today")
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+
 	if pd.Precision != PrecisionDay {
 		t.Errorf("today: expected PrecisionDay, got %v", pd.Precision)
 	}
-	if !isSameDay(pd.Time, now) {
-		t.Errorf("today: expected same day, got %v", pd.Time)
+	if !pd.Time.Equal(fixedToday) {
+		t.Errorf("today: expected %v, got %v", fixedToday, pd.Time)
 	}
 	if pd.Time.Hour() != 0 || pd.Time.Minute() != 0 {
 		t.Errorf("today: expected midnight, got %v", pd.Time)
@@ -55,178 +56,169 @@ func TestParseSemantic_Today(t *testing.T) {
 }
 
 func TestParseSemantic_Tomorrow(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "tomorrow")
-	expected := now.AddDate(0, 0, 1)
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	expected := fixedToday.AddDate(0, 0, 1)
+
 	if pd.Precision != PrecisionDay {
 		t.Errorf("tomorrow: expected PrecisionDay, got %v", pd.Precision)
 	}
-	if !isSameDay(pd.Time, expected) {
+	if !pd.Time.Equal(expected) {
 		t.Errorf("tomorrow: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_Tmr(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "tmr")
-	expected := now.AddDate(0, 0, 1)
-	if !isSameDay(pd.Time, expected) {
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	expected := fixedToday.AddDate(0, 0, 1)
+	if !pd.Time.Equal(expected) {
 		t.Errorf("tmr: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_Yesterday(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "yesterday")
-	expected := now.AddDate(0, 0, -1)
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	expected := fixedToday.AddDate(0, 0, -1)
+
 	if pd.Precision != PrecisionDay {
 		t.Errorf("yesterday: expected PrecisionDay, got %v", pd.Precision)
 	}
-	if !isSameDay(pd.Time, expected) {
+	if !pd.Time.Equal(expected) {
 		t.Errorf("yesterday: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_ThisWeek(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "this week")
 	if pd.Precision != PrecisionWeek {
 		t.Errorf("this week: expected PrecisionWeek, got %v", pd.Precision)
 	}
-	start := startOfWeek(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), WeekStartDay)
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	start := startOfWeek(fixedToday, WeekStartDay)
 	if !pd.Time.Equal(start) {
 		t.Errorf("this week: expected %v, got %v", start, pd.Time)
 	}
 }
 
 func TestParseSemantic_NextWeek(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "next week")
 	if pd.Precision != PrecisionWeek {
 		t.Errorf("next week: expected PrecisionWeek, got %v", pd.Precision)
 	}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	start := startOfWeek(today, WeekStartDay).AddDate(0, 0, 7)
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	start := startOfWeek(fixedToday, WeekStartDay).AddDate(0, 0, 7)
 	if !pd.Time.Equal(start) {
 		t.Errorf("next week: expected %v, got %v", start, pd.Time)
 	}
 }
 
 func TestParseSemantic_LastWeek(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "last week")
 	if pd.Precision != PrecisionWeek {
 		t.Errorf("last week: expected PrecisionWeek, got %v", pd.Precision)
 	}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	start := startOfWeek(today, WeekStartDay).AddDate(0, 0, -7)
+	fixedToday := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
+	start := startOfWeek(fixedToday, WeekStartDay).AddDate(0, 0, -7)
 	if !pd.Time.Equal(start) {
 		t.Errorf("last week: expected %v, got %v", start, pd.Time)
 	}
 }
 
 func TestParseSemantic_ThisMonth(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "this month")
 	if pd.Precision != PrecisionMonth {
 		t.Errorf("this month: expected PrecisionMonth, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	expected := time.Date(fixedNow.Year(), fixedNow.Month(), 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("this month: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_NextMonth(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "next month")
 	if pd.Precision != PrecisionMonth {
 		t.Errorf("next month: expected PrecisionMonth, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0)
+	expected := time.Date(fixedNow.Year(), fixedNow.Month(), 1, 0, 0, 0, 0, fixedNow.Location()).AddDate(0, 1, 0)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("next month: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_LastMonth(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "last month")
 	if pd.Precision != PrecisionMonth {
 		t.Errorf("last month: expected PrecisionMonth, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -1, 0)
+	expected := time.Date(fixedNow.Year(), fixedNow.Month(), 1, 0, 0, 0, 0, fixedNow.Location()).AddDate(0, -1, 0)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("last month: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_ThisQuarter(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "this quarter")
 	if pd.Precision != PrecisionQuarter {
 		t.Errorf("this quarter: expected PrecisionQuarter, got %v", pd.Precision)
 	}
-	q := (int(now.Month())-1)/3 + 1
+	q := (int(fixedNow.Month())-1)/3 + 1
 	startMonth := (q-1)*3 + 1
-	expected := time.Date(now.Year(), time.Month(startMonth), 1, 0, 0, 0, 0, now.Location())
+	expected := time.Date(fixedNow.Year(), time.Month(startMonth), 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("this quarter: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_NextQuarter(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "next quarter")
 	if pd.Precision != PrecisionQuarter {
 		t.Errorf("next quarter: expected PrecisionQuarter, got %v", pd.Precision)
 	}
-	q := (int(now.Month())-1)/3 + 1
-	if q >= 4 {
-		q = 0
-	}
-	startMonth := q*3 + 1
-	year := now.Year()
-	if q == 0 {
+	q := (int(fixedNow.Month())-1)/3 + 1
+	nextQ := q + 1
+	year := fixedNow.Year()
+	if nextQ > 4 {
+		nextQ = 1
 		year++
 	}
-	expected := time.Date(year, time.Month(startMonth), 1, 0, 0, 0, 0, now.Location())
+	startMonth := (nextQ-1)*3 + 1
+	expected := time.Date(year, time.Month(startMonth), 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("next quarter: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_ThisYear(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "this year")
 	if pd.Precision != PrecisionYear {
 		t.Errorf("this year: expected PrecisionYear, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+	expected := time.Date(fixedNow.Year(), 1, 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("this year: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_NextYear(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "next year")
 	if pd.Precision != PrecisionYear {
 		t.Errorf("next year: expected PrecisionYear, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, now.Location())
+	expected := time.Date(fixedNow.Year()+1, 1, 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("next year: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseSemantic_LastYear(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "last year")
 	if pd.Precision != PrecisionYear {
 		t.Errorf("last year: expected PrecisionYear, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, now.Location())
+	expected := time.Date(fixedNow.Year()-1, 1, 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("last year: expected %v, got %v", expected, pd.Time)
 	}
@@ -235,71 +227,68 @@ func TestParseSemantic_LastYear(t *testing.T) {
 // --- Relative dates ---
 
 func TestParseRelative_PlusDays(t *testing.T) {
-	now := time.Now()
+	fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 	pd := parseOrFail(t, "+3d")
 	if pd.Precision != PrecisionDay {
 		t.Errorf("+3d: expected PrecisionDay, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 3)
+	expected := fixedMidnight.AddDate(0, 0, 3)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("+3d: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseRelative_MinusWeeks(t *testing.T) {
-	now := time.Now()
+	fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 	pd := parseOrFail(t, "-2w")
 	if pd.Precision != PrecisionWeek {
 		t.Errorf("-2w: expected PrecisionWeek, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -14)
+	expected := fixedMidnight.AddDate(0, 0, -14)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("-2w: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseRelative_PlusMonths(t *testing.T) {
-	now := time.Now()
+	fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 	pd := parseOrFail(t, "+1m")
 	if pd.Precision != PrecisionDay {
 		t.Errorf("+1m: expected PrecisionDay, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0)
+	expected := fixedMidnight.AddDate(0, 1, 0)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("+1m: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseRelative_PlusYears(t *testing.T) {
-	now := time.Now()
+	fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 	pd := parseOrFail(t, "+1y")
 	if pd.Precision != PrecisionDay {
 		t.Errorf("+1y: expected PrecisionDay, got %v", pd.Precision)
 	}
-	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(1, 0, 0)
+	expected := fixedMidnight.AddDate(1, 0, 0)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("+1y: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseRelative_PlusHours(t *testing.T) {
-	before := time.Now()
 	pd := parseOrFail(t, "+6h")
-	after := time.Now()
 	if pd.Precision != PrecisionExact {
 		t.Errorf("+6h: expected PrecisionExact, got %v", pd.Precision)
 	}
-	expectedMin := before.Add(6 * time.Hour)
-	expectedMax := after.Add(6 * time.Hour)
-	if pd.Time.Before(expectedMin) || pd.Time.After(expectedMax) {
-		t.Errorf("+6h: got %v, expected between %v and %v", pd.Time, expectedMin, expectedMax)
+	expected := fixedNow.Add(6 * time.Hour)
+	if !pd.Time.Equal(expected) {
+		t.Errorf("+6h: expected %v, got %v", expected, pd.Time)
 	}
 }
 
 func TestParseRelative_NegativeDays(t *testing.T) {
-	now := time.Now()
+	fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 	pd := parseOrFail(t, "-1d")
-	expected := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -1)
+	expected := fixedMidnight.AddDate(0, 0, -1)
 	if !pd.Time.Equal(expected) {
 		t.Errorf("-1d: expected %v, got %v", expected, pd.Time)
 	}
@@ -322,7 +311,7 @@ func TestParseYearOnly_CurrentCentury(t *testing.T) {
 	if pd.Year != 2025 {
 		t.Errorf("2025: expected year 2025, got %d", pd.Year)
 	}
-	expected := time.Date(2025, 1, 1, 0, 0, 0, 0, time.Now().Location())
+	expected := time.Date(2025, 1, 1, 0, 0, 0, 0, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("2025: expected %v, got %v", expected, pd.Time)
 	}
@@ -351,7 +340,6 @@ func TestParseYearOnly_Invalid(t *testing.T) {
 // --- Quarter ---
 
 func TestParseQuarter_Simple(t *testing.T) {
-	now := time.Now()
 	tests := []struct {
 		input   string
 		quarter int
@@ -368,7 +356,7 @@ func TestParseQuarter_Simple(t *testing.T) {
 			t.Errorf("%s: expected quarter %d, got %d", tt.input, tt.quarter, pd.Quarter)
 		}
 		startMonth := (tt.quarter-1)*3 + 1
-		expected := time.Date(now.Year(), time.Month(startMonth), 1, 0, 0, 0, 0, now.Location())
+		expected := time.Date(fixedNow.Year(), time.Month(startMonth), 1, 0, 0, 0, 0, fixedNow.Location())
 		if !pd.Time.Equal(expected) {
 			t.Errorf("%s: expected %v, got %v", tt.input, expected, pd.Time)
 		}
@@ -439,7 +427,6 @@ func TestParseYearMonth_Invalid(t *testing.T) {
 // --- Month-only ---
 
 func TestParseMonthOnly(t *testing.T) {
-	now := time.Now()
 	tests := []string{
 		"january", "jan",
 		"february", "feb",
@@ -459,12 +446,11 @@ func TestParseMonthOnly(t *testing.T) {
 		if pd.Precision != PrecisionMonth {
 			t.Errorf("%s: expected PrecisionMonth, got %v", input, pd.Precision)
 		}
-		expectedYear := now.Year()
-		// If parsed month is before current month, auto-advances year
-		expected := time.Date(expectedYear, pd.Time.Month(), 1, 0, 0, 0, 0, now.Location())
-		if pd.Time.Month() < now.Month() {
-			expected = time.Date(expectedYear+1, pd.Time.Month(), 1, 0, 0, 0, 0, now.Location())
+		expectedYear := fixedNow.Year()
+		if pd.Time.Month() < fixedNow.Month() {
+			expectedYear++
 		}
+		expected := time.Date(expectedYear, pd.Time.Month(), 1, 0, 0, 0, 0, fixedNow.Location())
 		if !pd.Time.Equal(expected) {
 			t.Errorf("%s: expected %v, got %v", input, expected, pd.Time)
 		}
@@ -479,7 +465,6 @@ func TestParseMonthOnly_Invalid(t *testing.T) {
 // --- Week number ---
 
 func TestParseWeekNumber_Basic(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "W47")
 	if pd.Precision != PrecisionWeek {
 		t.Errorf("W47: expected PrecisionWeek, got %v", pd.Precision)
@@ -487,7 +472,7 @@ func TestParseWeekNumber_Basic(t *testing.T) {
 	if pd.WeekNumber != 47 {
 		t.Errorf("W47: expected week 47, got %d", pd.WeekNumber)
 	}
-	expected := isoWeekStart(now.Year(), 47, now.Location())
+	expected := isoWeekStart(fixedNow.Year(), 47, fixedNow.Location())
 	if !pd.Time.Equal(expected) {
 		t.Errorf("W47: expected %v, got %v", expected, pd.Time)
 	}
@@ -520,7 +505,6 @@ func TestParseWeekNumber_Invalid(t *testing.T) {
 // --- Weekday ---
 
 func TestParseWeekday(t *testing.T) {
-	now := time.Now()
 	weekdays := []string{
 		"sunday", "sun",
 		"monday", "mon",
@@ -535,14 +519,14 @@ func TestParseWeekday(t *testing.T) {
 		if pd.Precision != PrecisionDay {
 			t.Errorf("%s: expected PrecisionDay, got %v", input, pd.Precision)
 		}
+		fixedMidnight := time.Date(fixedNow.Year(), fixedNow.Month(), fixedNow.Day(), 0, 0, 0, 0, fixedNow.Location())
 		expectedDay := pd.Time.Weekday()
-		inputTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		if !isSameDay(pd.Time, inputTime) && !pd.Time.After(inputTime) {
-			t.Errorf("%s: got %v which is before today %v", input, pd.Time, inputTime)
+		if !pd.Time.Equal(fixedMidnight) && !pd.Time.After(fixedMidnight) {
+			t.Errorf("%s: got %v which is before today %v", input, pd.Time, fixedMidnight)
 		}
-		if inputTime.Weekday() == expectedDay {
-			if !isSameDay(pd.Time, inputTime) {
-				t.Errorf("%s: today is %s, expected today, got %v", input, inputTime.Weekday(), pd.Time)
+		if fixedMidnight.Weekday() == expectedDay {
+			if !pd.Time.Equal(fixedMidnight) {
+				t.Errorf("%s: today is %s, expected today, got %v", input, fixedMidnight.Weekday(), pd.Time)
 			}
 		}
 	}
@@ -661,14 +645,12 @@ func TestParseStandard_HoursOnly(t *testing.T) {
 }
 
 func TestParseStandard_MonthDayNoYear(t *testing.T) {
-	now := time.Now()
 	pd := parseOrFail(t, "Jan 2")
 	if pd.Month != 1 || pd.Day != 2 {
 		t.Errorf("expected Jan 2, got month=%d day=%d", pd.Month, pd.Day)
 	}
-	// Year should default to current year
-	if pd.Year != now.Year() {
-		t.Errorf("expected current year %d, got %d", now.Year(), pd.Year)
+	if pd.Year != fixedNow.Year() {
+		t.Errorf("expected current year %d, got %d", fixedNow.Year(), pd.Year)
 	}
 }
 
@@ -691,12 +673,12 @@ func TestParse_Garbage(t *testing.T) {
 // --- ParseTaskDate ---
 
 func TestParseTaskDate_ImpreciseGetsDefaultTime(t *testing.T) {
-	dt, err := ParseTaskDate("today")
+	dt, err := ParseTaskDate("2026-06-20")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if dt.Hour() != DefaultTimeHour || dt.Minute() != DefaultTimeMinute {
-		t.Errorf("today: expected %d:%d, got %d:%d", DefaultTimeHour, DefaultTimeMinute, dt.Hour(), dt.Minute())
+		t.Errorf("expected %d:%d, got %d:%d", DefaultTimeHour, DefaultTimeMinute, dt.Hour(), dt.Minute())
 	}
 }
 
@@ -718,7 +700,7 @@ func TestParseTaskDate_Invalid(t *testing.T) {
 }
 
 func TestParseTaskDateWithTime(t *testing.T) {
-	dt, err := ParseTaskDateWithTime("today", 8, 30)
+	dt, err := ParseTaskDateWithTime("2026-06-20", 8, 30)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

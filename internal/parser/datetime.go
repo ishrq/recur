@@ -71,14 +71,18 @@ func (p ParsedDate) ExactTime(defaultHour, defaultMinute int) time.Time {
 	}
 }
 
-// ParseDateTime parses a date/time string into a ParsedDate
+// ParseDateTime parses a date/time string into a ParsedDate using the current time.
 func ParseDateTime(input string) (*ParsedDate, error) {
+	return ParseDateTimeWithNow(input, time.Now())
+}
+
+// ParseDateTimeWithNow is like ParseDateTime but uses a caller-supplied "now" for deterministic parsing.
+func ParseDateTimeWithNow(input string, now time.Time) (*ParsedDate, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, fmt.Errorf("empty date string")
 	}
 
-	now := time.Now()
 	loc := now.Location()
 
 	// Try each parser in order of specificity
