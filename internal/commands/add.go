@@ -89,7 +89,7 @@ func addWithEditor(database *sql.DB, initialContent string) error {
 				fmt.Printf("%d. %s\n", i+1, task.Name)
 			}
 
-			ok, err := confirmPrompt(fmt.Sprintf("\nAdd these %d tasks? (y/n): ", len(tasks)))
+			ok, err := ConfirmPrompt(fmt.Sprintf("\nAdd these %d tasks? (y/n): ", len(tasks)))
 			if err != nil {
 				return err
 			}

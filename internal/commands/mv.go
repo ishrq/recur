@@ -102,7 +102,7 @@ func Move(database *sql.DB, args []string) error {
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Edit these %d task(s)? (y/n): ", len(tasksToEdit)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Edit these %d task(s)? (y/n): ", len(tasksToEdit)))
 	if err != nil {
 		return err
 	}

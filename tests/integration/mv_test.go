@@ -2,6 +2,8 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/ishrq/recur/internal/commands"
 )
 
 func TestMoveCommand_SingleTask(t *testing.T) {
@@ -10,7 +12,7 @@ func TestMoveCommand_SingleTask(t *testing.T) {
 
 	CreateTestTask(t, database, "Original name", WithTag("work"))
 
-	err := TestMove(database, []string{"1", "Updated name #personal"})
+	err := commands.Move(database, []string{"1", "Updated name #personal"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -27,7 +29,7 @@ func TestMoveCommand_MultipleTasks(t *testing.T) {
 	CreateTestTask(t, database, "Task 1")
 	CreateTestTask(t, database, "Task 2")
 
-	err := TestMove(database, []string{"1", "2", "Updated name +Project"})
+	err := commands.Move(database, []string{"1", "2", "Updated name +Project"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -48,7 +50,7 @@ func TestMoveCommand_UpdateTag(t *testing.T) {
 
 	CreateTestTask(t, database, "Task", WithTag("old"))
 
-	err := TestMove(database, []string{"1", "Task #new"})
+	err := commands.Move(database, []string{"1", "Task #new"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -63,7 +65,7 @@ func TestMoveCommand_UpdateProject(t *testing.T) {
 
 	CreateTestTask(t, database, "Task", WithProject("OldProject"))
 
-	err := TestMove(database, []string{"1", "Task +NewProject"})
+	err := commands.Move(database, []string{"1", "Task +NewProject"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -78,7 +80,7 @@ func TestMoveCommand_UpdatePriority(t *testing.T) {
 
 	CreateTestTask(t, database, "Task", WithPriority("low"))
 
-	err := TestMove(database, []string{"1", "Task !urgent"})
+	err := commands.Move(database, []string{"1", "Task !urgent"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -93,7 +95,7 @@ func TestMoveCommand_UpdateDueDate(t *testing.T) {
 
 	CreateTestTask(t, database, "Task", WithDueDate(Today()))
 
-	err := TestMove(database, []string{"1", "Task @(2025-12-31 5pm)"})
+	err := commands.Move(database, []string{"1", "Task @(2025-12-31 5pm)"})
 	if err != nil {
 		t.Fatalf("Move command failed: %v", err)
 	}
@@ -109,12 +111,12 @@ func TestMoveCommand_DeletedTask(t *testing.T) {
 	defer cleanup()
 
 	CreateTestTask(t, database, "Task")
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 
-	// Should not update deleted task
-	err := TestMove(database, []string{"1", "Updated name"})
-	if err != nil {
-		t.Fatalf("Move command failed: %v", err)
+	// Should report error since task is deleted
+	err := commands.Move(database, []string{"1", "Updated name"})
+	if err == nil {
+		t.Fatal("Expected error for deleted task")
 	}
 
 	task := GetTaskByID(t, database, 1)

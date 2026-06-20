@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-func confirmPrompt(msg string) (bool, error) {
+var ConfirmPrompt = defaultConfirmPrompt
+var ConfirmSpecific = defaultConfirmSpecific
+
+func defaultConfirmPrompt(msg string) (bool, error) {
 	fmt.Print(msg)
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
@@ -18,7 +21,7 @@ func confirmPrompt(msg string) (bool, error) {
 	return response == "y" || response == "yes", nil
 }
 
-func confirmSpecific(msg, expected string) (bool, error) {
+func defaultConfirmSpecific(msg, expected string) (bool, error) {
 	fmt.Print(msg)
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')

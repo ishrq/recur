@@ -6,9 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ishrq/recur/internal/commands"
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/models"
 )
+
+func init() {
+	commands.ConfirmPrompt = func(_ string) (bool, error) { return true, nil }
+	commands.ConfirmSpecific = func(_, _ string) (bool, error) { return true, nil }
+}
 
 // SetupTestDB creates a temporary database for testing
 func SetupTestDB(t *testing.T) (*sql.DB, func()) {

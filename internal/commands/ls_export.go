@@ -81,7 +81,7 @@ func exportTasksToCSV(tasks []models.Task, filename string) error {
 	}
 
 	if _, err := os.Stat(filename); err == nil {
-		ok, err := confirmPrompt(fmt.Sprintf("File '%s' already exists. Overwrite? (y/n): ", filename))
+		ok, err := ConfirmPrompt(fmt.Sprintf("File '%s' already exists. Overwrite? (y/n): ", filename))
 		if err != nil {
 			return err
 		}

@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 	"time"
+
+	"github.com/ishrq/recur/internal/commands"
 )
 
 func TestDoneCommand_SingleTask(t *testing.T) {
@@ -11,7 +13,7 @@ func TestDoneCommand_SingleTask(t *testing.T) {
 
 	id := CreateTestTask(t, database, "Test task")
 
-	err := TestDone(database, []string{"1"})
+	err := commands.Done(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Done command failed: %v", err)
 	}
@@ -27,7 +29,7 @@ func TestDoneCommand_MultipleTasks(t *testing.T) {
 	id2 := CreateTestTask(t, database, "Task 2")
 	id3 := CreateTestTask(t, database, "Task 3")
 
-	err := TestDone(database, []string{"1", "2", "3"})
+	err := commands.Done(database, []string{"1", "2", "3"})
 	if err != nil {
 		t.Fatalf("Done command failed: %v", err)
 	}
@@ -41,15 +43,13 @@ func TestDoneCommand_AlreadyCompleted(t *testing.T) {
 	database, cleanup := SetupTestDB(t)
 	defer cleanup()
 
-	id := CreateTestTask(t, database, "Task", WithCompleted(Today()))
+	CreateTestTask(t, database, "Task", WithCompleted(Today()))
 
-	// Should handle gracefully
-	err := TestDone(database, []string{"1"})
-	if err != nil {
-		t.Fatalf("Done command failed: %v", err)
+	// Should report error since all tasks are already completed
+	err := commands.Done(database, []string{"1"})
+	if err == nil {
+		t.Fatal("Expected error for already completed task")
 	}
-
-	AssertTaskCompleted(t, database, int(id))
 }
 
 func TestDoneCommand_DeletedTask(t *testing.T) {
@@ -57,12 +57,12 @@ func TestDoneCommand_DeletedTask(t *testing.T) {
 	defer cleanup()
 
 	id := CreateTestTask(t, database, "Task")
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 
-	// Should not mark deleted task as done
-	err := TestDone(database, []string{"1"})
-	if err != nil {
-		t.Fatalf("Done command failed: %v", err)
+	// Should report error since the task is deleted
+	err := commands.Done(database, []string{"1"})
+	if err == nil {
+		t.Fatal("Expected error for deleted task")
 	}
 
 	task := GetTaskByID(t, database, int(id))
@@ -80,7 +80,7 @@ func TestDoneCommand_RecurringTask(t *testing.T) {
 		WithDueDate(dueDate),
 		WithRecurring("1w", nil))
 
-	err := TestDone(database, []string{"1"})
+	err := commands.Done(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Done command failed: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestDoneCommand_RecurringWithEndDate(t *testing.T) {
 		WithDueDate(dueDate),
 		WithRecurring("1w", &endDate))
 
-	err := TestDone(database, []string{"1"})
+	err := commands.Done(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Done command failed: %v", err)
 	}
@@ -140,11 +140,11 @@ func TestDoneCommand_Undo(t *testing.T) {
 	id := CreateTestTask(t, database, "Task")
 
 	// Mark as done
-	TestDone(database, []string{"1"})
+	commands.Done(database, []string{"1"})
 	AssertTaskCompleted(t, database, int(id))
 
 	// Undo
-	err := TestDone(database, []string{"--undo", "1"})
+	err := commands.Done(database, []string{"--undo", "1"})
 	if err != nil {
 		t.Fatalf("Done undo failed: %v", err)
 	}
@@ -160,10 +160,10 @@ func TestDoneCommand_UndoMultiple(t *testing.T) {
 	id2 := CreateTestTask(t, database, "Task 2")
 
 	// Mark as done
-	TestDone(database, []string{"1", "2"})
+	commands.Done(database, []string{"1", "2"})
 
 	// Undo both
-	err := TestDone(database, []string{"--undo", "1", "2"})
+	err := commands.Done(database, []string{"--undo", "1", "2"})
 	if err != nil {
 		t.Fatalf("Done undo failed: %v", err)
 	}

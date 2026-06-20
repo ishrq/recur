@@ -115,7 +115,7 @@ func duplicateTasksInPlace(database *sql.DB, tasks []models.Task) error {
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Duplicate these %d task(s)? (y/n): ", len(tasks)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Duplicate these %d task(s)? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func copyWithModifications(database *sql.DB, tasks []models.Task, modifyStr stri
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Copy these %d task(s) with modifications? (y/n): ", len(tasks)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Copy these %d task(s) with modifications? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}

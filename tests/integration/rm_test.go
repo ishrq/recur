@@ -1,8 +1,10 @@
 package integration
 
 import (
-	"github.com/ishrq/recur/internal/db"
 	"testing"
+
+	"github.com/ishrq/recur/internal/commands"
+	"github.com/ishrq/recur/internal/db"
 )
 
 func TestRemoveCommand_SingleTask(t *testing.T) {
@@ -11,7 +13,7 @@ func TestRemoveCommand_SingleTask(t *testing.T) {
 
 	id := CreateTestTask(t, database, "Task to delete")
 
-	err := TestRemove(database, []string{"1"})
+	err := commands.Remove(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Remove command failed: %v", err)
 	}
@@ -27,7 +29,7 @@ func TestRemoveCommand_MultipleTasks(t *testing.T) {
 	id2 := CreateTestTask(t, database, "Task 2")
 	id3 := CreateTestTask(t, database, "Task 3")
 
-	err := TestRemove(database, []string{"1", "2", "3"})
+	err := commands.Remove(database, []string{"1", "2", "3"})
 	if err != nil {
 		t.Fatalf("Remove command failed: %v", err)
 	}
@@ -41,10 +43,10 @@ func TestRemoveCommand_NonExistent(t *testing.T) {
 	database, cleanup := SetupTestDB(t)
 	defer cleanup()
 
-	// Should handle gracefully
-	err := TestRemove(database, []string{"999"})
-	if err != nil {
-		t.Fatalf("Remove command failed: %v", err)
+	// Should report error since no task with this ID exists
+	err := commands.Remove(database, []string{"999"})
+	if err == nil {
+		t.Fatal("Expected error for non-existent task")
 	}
 }
 
@@ -53,12 +55,12 @@ func TestRemoveCommand_AlreadyDeleted(t *testing.T) {
 	defer cleanup()
 
 	id := CreateTestTask(t, database, "Task")
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 
-	// Should handle gracefully
-	err := TestRemove(database, []string{"1"})
-	if err != nil {
-		t.Fatalf("Remove command failed: %v", err)
+	// Should report error since task is already deleted
+	err := commands.Remove(database, []string{"1"})
+	if err == nil {
+		t.Fatal("Expected error for already deleted task")
 	}
 
 	AssertTaskDeleted(t, database, int(id))
@@ -71,11 +73,11 @@ func TestRemoveCommand_Undo(t *testing.T) {
 	id := CreateTestTask(t, database, "Task")
 
 	// Delete
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 	AssertTaskDeleted(t, database, int(id))
 
 	// Restore
-	err := TestRemove(database, []string{"--undo", "1"})
+	err := commands.Remove(database, []string{"--undo", "1"})
 	if err != nil {
 		t.Fatalf("Remove undo failed: %v", err)
 	}
@@ -94,10 +96,10 @@ func TestRemoveCommand_UndoMultiple(t *testing.T) {
 	id2 := CreateTestTask(t, database, "Task 2")
 
 	// Delete
-	TestRemove(database, []string{"1", "2"})
+	commands.Remove(database, []string{"1", "2"})
 
 	// Restore
-	err := TestRemove(database, []string{"--undo", "1", "2"})
+	err := commands.Remove(database, []string{"--undo", "1", "2"})
 	if err != nil {
 		t.Fatalf("Remove undo failed: %v", err)
 	}
@@ -117,11 +119,11 @@ func TestRemoveCommand_PermanentDelete(t *testing.T) {
 	id := CreateTestTask(t, database, "Task")
 
 	// Soft delete first
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 	AssertTaskDeleted(t, database, int(id))
 
 	// Permanent delete
-	err := TestRemove(database, []string{"--trash", "1"})
+	err := commands.Remove(database, []string{"--trash", "1"})
 	if err != nil {
 		t.Fatalf("Remove trash failed: %v", err)
 	}

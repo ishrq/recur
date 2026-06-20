@@ -88,7 +88,7 @@ func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) erro
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func completeTasks(database *sql.DB, ids []int, filters filter.Filters) error {
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}

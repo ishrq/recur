@@ -92,7 +92,7 @@ func purgeAllTasks(database *sql.DB) error {
 	fmt.Println("⚠️  This action CANNOT be undone!")
 	fmt.Printf("\nTotal tasks in database: %d\n\n", count)
 
-	ok, err := confirmSpecific("Type 'DELETE ALL' to confirm: ", "DELETE ALL")
+	ok, err := ConfirmSpecific("Type 'DELETE ALL' to confirm: ", "DELETE ALL")
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func restoreDeletedTasks(database *sql.DB, ids []int, filters filter.Filters) er
 	}
 	fmt.Println()
 
-	ok, err := confirmPrompt(fmt.Sprintf("Restore these %d task(s)? (y/n): ", len(tasks)))
+	ok, err := ConfirmPrompt(fmt.Sprintf("Restore these %d task(s)? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func removeTasks(database *sql.DB, ids []int, filters filter.Filters, removeAll,
 		prompt = fmt.Sprintf("Permanently delete these %d task(s)? (y/n): ", len(tasks))
 	}
 
-	ok, err := confirmPrompt(prompt)
+	ok, err := ConfirmPrompt(prompt)
 	if err != nil {
 		return err
 	}

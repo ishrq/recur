@@ -2,6 +2,8 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/ishrq/recur/internal/commands"
 )
 
 func TestCopyCommand_SingleTask(t *testing.T) {
@@ -10,7 +12,7 @@ func TestCopyCommand_SingleTask(t *testing.T) {
 
 	CreateTestTask(t, database, "Original task", WithTag("work"))
 
-	err := TestCopy(database, []string{"1"})
+	err := commands.Copy(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Copy command failed: %v", err)
 	}
@@ -36,7 +38,7 @@ func TestCopyCommand_MultipleTasks(t *testing.T) {
 	CreateTestTask(t, database, "Task 1")
 	CreateTestTask(t, database, "Task 2")
 
-	err := TestCopy(database, []string{"1", "2"})
+	err := commands.Copy(database, []string{"1", "2"})
 	if err != nil {
 		t.Fatalf("Copy command failed: %v", err)
 	}
@@ -51,7 +53,7 @@ func TestCopyCommand_WithModification(t *testing.T) {
 
 	CreateTestTask(t, database, "Original task", WithTag("work"))
 
-	err := TestCopy(database, []string{"1", "Modified copy #personal"})
+	err := commands.Copy(database, []string{"1", "Modified copy #personal"})
 	if err != nil {
 		t.Fatalf("Copy command failed: %v", err)
 	}
@@ -71,7 +73,7 @@ func TestCopyCommand_CompletedTask(t *testing.T) {
 	CreateTestTask(t, database, "Completed task", WithCompleted(Today()))
 
 	// Copy of completed task should be incomplete
-	err := TestCopy(database, []string{"1"})
+	err := commands.Copy(database, []string{"1"})
 	if err != nil {
 		t.Fatalf("Copy command failed: %v", err)
 	}
@@ -85,12 +87,12 @@ func TestCopyCommand_DeletedTask(t *testing.T) {
 	defer cleanup()
 
 	CreateTestTask(t, database, "Task")
-	TestRemove(database, []string{"1"})
+	commands.Remove(database, []string{"1"})
 
-	// Should not copy deleted task
-	err := TestCopy(database, []string{"1"})
-	if err != nil {
-		t.Fatalf("Copy command failed: %v", err)
+	// Should report error since task is deleted
+	err := commands.Copy(database, []string{"1"})
+	if err == nil {
+		t.Fatal("Expected error for deleted task")
 	}
 
 	// Should still have only 1 task (the deleted one)
