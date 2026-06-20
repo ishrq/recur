@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/ishrq/recur/internal/models"
 )
 
 var ConfirmPrompt = defaultConfirmPrompt
@@ -30,4 +32,22 @@ func defaultConfirmSpecific(msg, expected string) (bool, error) {
 	}
 	response = strings.TrimSpace(response)
 	return response == expected, nil
+}
+
+func confirmTasks(tasks []models.Task, title, prompt string) (bool, error) {
+	fmt.Printf("\n%s\n", title)
+	for _, t := range tasks {
+		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
+	}
+	fmt.Println()
+
+	ok, err := ConfirmPrompt(prompt)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		fmt.Println("Operation cancelled.")
+		return false, nil
+	}
+	return true, nil
 }

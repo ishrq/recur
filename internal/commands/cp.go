@@ -108,22 +108,14 @@ func Copy(database *sql.DB, args []string) error {
 }
 
 func duplicateTasksInPlace(database *sql.DB, tasks []models.Task) error {
-	fmt.Printf("\nFound %d task(s) to copy:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Duplicate these %d task(s)? (y/n): ", len(tasks)))
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d task(s) to copy:", len(tasks)), fmt.Sprintf("Duplicate these %d task(s)? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Operation cancelled.")
 		return nil
 	}
 
-	// Duplicate tasks exactly
 	copied := 0
 	for _, task := range tasks {
 		newTask := task.Clone()
@@ -146,22 +138,14 @@ func duplicateTasksInPlace(database *sql.DB, tasks []models.Task) error {
 }
 
 func copyWithModifications(database *sql.DB, tasks []models.Task, modifyStr string) error {
-	fmt.Printf("\nFound %d task(s) to copy:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Copy these %d task(s) with modifications? (y/n): ", len(tasks)))
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d task(s) to copy:", len(tasks)), fmt.Sprintf("Copy these %d task(s) with modifications? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Operation cancelled.")
 		return nil
 	}
 
-	// Parse modification
 	parsedChanges, err := parser.ParseTaskString(modifyStr)
 	if err != nil {
 		return fmt.Errorf("failed to parse modifications: %w", err)

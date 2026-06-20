@@ -141,18 +141,11 @@ func restoreDeletedTasks(database *sql.DB, ids []int, filters filter.Filters) er
 		return fmt.Errorf("no deleted tasks found matching criteria")
 	}
 
-	fmt.Printf("\nFound %d deleted task(s) to restore:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Restore these %d task(s)? (y/n): ", len(tasks)))
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d deleted task(s) to restore:", len(tasks)), fmt.Sprintf("Restore these %d task(s)? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Restore cancelled.")
 		return nil
 	}
 
@@ -221,29 +214,20 @@ func removeTasks(database *sql.DB, ids []int, filters filter.Filters, removeAll,
 		return fmt.Errorf("no tasks found matching criteria")
 	}
 
-	fmt.Println()
 	if permanentDelete {
 		fmt.Println("⚠️  WARNING: This will PERMANENTLY delete tasks from the database.")
 		fmt.Println("⚠️  This action CANNOT be undone!")
-		fmt.Println()
 	}
-	fmt.Printf("Found %d task(s) to delete:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
 	prompt := fmt.Sprintf("Delete these %d task(s)? (y/n): ", len(tasks))
 	if permanentDelete {
 		prompt = fmt.Sprintf("Permanently delete these %d task(s)? (y/n): ", len(tasks))
 	}
 
-	ok, err := ConfirmPrompt(prompt)
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d task(s) to delete:", len(tasks)), prompt)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Deletion cancelled.")
 		return nil
 	}
 

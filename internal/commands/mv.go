@@ -95,23 +95,14 @@ func Move(database *sql.DB, args []string) error {
 		}
 	}
 
-	// Display tasks to be edited
-	fmt.Printf("\nFound %d task(s) to edit:\n", len(tasksToEdit))
-	for _, t := range tasksToEdit {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Edit these %d task(s)? (y/n): ", len(tasksToEdit)))
+	ok, err := confirmTasks(tasksToEdit, fmt.Sprintf("Found %d task(s) to edit:", len(tasksToEdit)), fmt.Sprintf("Edit these %d task(s)? (y/n): ", len(tasksToEdit)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Operation cancelled.")
 		return nil
 	}
 
-	// Parse changes
 	parsedChanges, err := parser.ParseTaskString(modifyStr)
 	if err != nil {
 		return fmt.Errorf("failed to parse changes: %w", err)

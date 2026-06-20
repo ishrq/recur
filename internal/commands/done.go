@@ -81,18 +81,11 @@ func undoCompleteTasks(database *sql.DB, ids []int, filters filter.Filters) erro
 		return fmt.Errorf("no completed tasks found matching criteria")
 	}
 
-	fmt.Printf("\nFound %d completed task(s) to unmark:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks)))
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d completed task(s) to unmark:", len(tasks)), fmt.Sprintf("Unmark these %d task(s) as incomplete? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Operation cancelled.")
 		return nil
 	}
 
@@ -149,18 +142,11 @@ func completeTasks(database *sql.DB, ids []int, filters filter.Filters) error {
 		return fmt.Errorf("no tasks found matching criteria")
 	}
 
-	fmt.Printf("\nFound %d task(s) to complete:\n", len(tasks))
-	for _, t := range tasks {
-		fmt.Printf("#%-4d %s\n", t.ID, t.Name)
-	}
-	fmt.Println()
-
-	ok, err := ConfirmPrompt(fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks)))
+	ok, err := confirmTasks(tasks, fmt.Sprintf("Found %d task(s) to complete:", len(tasks)), fmt.Sprintf("Mark these %d task(s) as done? (y/n): ", len(tasks)))
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Println("Operation cancelled.")
 		return nil
 	}
 
