@@ -371,9 +371,6 @@ func parseWeekday(input string, now time.Time) (*ParsedDate, bool) {
 	}
 
 	daysUntil := (int(weekday) - int(now.Weekday()) + 7) % 7
-	if daysUntil == 0 {
-		daysUntil = 7 // Next week if today
-	}
 
 	t := now.AddDate(0, 0, daysUntil)
 	t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())

@@ -8,23 +8,19 @@ import (
 )
 
 // extractDueDate extracts the @(...) date expression from input
-func extractDueDate(input string, task *models.Task) string {
-	// Match @(...) with proper parenthesis handling
+func extractDueDate(input string, task *models.Task) (string, error) {
 	re := regexp.MustCompile(`@\(([^)]+)\)`)
 	matches := re.FindStringSubmatch(input)
 
 	if len(matches) > 1 {
 		dateStr := matches[1]
 		if err := parseDueDateString(dateStr, task); err != nil {
-			// Return input unchanged if parsing fails
-			// Could optionally log the error
-			return input
+			return input, err
 		}
-		// Remove the matched portion from input
-		return re.ReplaceAllString(input, "")
+		return re.ReplaceAllString(input, ""), nil
 	}
 
-	return input
+	return input, nil
 }
 
 // extractNote extracts the *'...' or *"..." note from input

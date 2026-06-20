@@ -22,7 +22,11 @@ func ParseTaskString(input string) (*models.Task, error) {
 
 	// Extract in order: date, note, tags, project, priority
 	// This order matters because we remove matched parts progressively
-	remaining = extractDueDate(remaining, task)
+	var err error
+	remaining, err = extractDueDate(remaining, task)
+	if err != nil {
+		return nil, err
+	}
 	remaining = extractNote(remaining, task)
 	remaining = extractTags(remaining, task)
 	remaining = extractProject(remaining, task)
@@ -80,6 +84,11 @@ func parseDueDateString(dateStr string, task *models.Task) error {
 				task.RecurEndDate = parsedEndDate
 			}
 		}
+	}
+
+	// Validate invariant: frequency requires a due date
+	if task.RecurFrequency != "" && task.DueDate == nil {
+		errors = append(errors, "frequency specified without a valid due date")
 	}
 
 	if len(errors) > 0 {
