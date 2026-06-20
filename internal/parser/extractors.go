@@ -41,17 +41,18 @@ func extractNote(input string, task *models.Task) string {
 	return input
 }
 
-// extractTags extracts the #tag from input
+// extractTags extracts #tag(s) from input, storing them comma-separated
 func extractTags(input string, task *models.Task) string {
-	// Match #word (alphanumeric, underscore, hyphen)
 	re := regexp.MustCompile(`#([\w-]+)`)
 	matches := re.FindAllStringSubmatch(input, -1)
 
 	if len(matches) > 0 {
-		// Use the first tag for now
-		task.Tag = matches[0][1]
-		// Remove only the first occurrence to avoid conflicts with other # symbols
-		return strings.Replace(input, matches[0][0], "", 1)
+		tags := make([]string, len(matches))
+		for i, m := range matches {
+			tags[i] = m[1]
+		}
+		task.Tag = strings.Join(tags, ",")
+		return re.ReplaceAllString(input, "")
 	}
 
 	return input

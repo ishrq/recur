@@ -907,3 +907,99 @@ func TestParseTaskString_RecurrenceWithoutDate(t *testing.T) {
 		t.Fatal("expected error for recurrence without valid date")
 	}
 }
+
+// --- SetDefaultTaskTime ---
+
+func TestSetDefaultTaskTime_Valid(t *testing.T) {
+	savedH, savedM := DefaultTimeHour, DefaultTimeMinute
+	defer func() { DefaultTimeHour, DefaultTimeMinute = savedH, savedM }()
+
+	if err := SetDefaultTaskTime("08:30"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if DefaultTimeHour != 8 || DefaultTimeMinute != 30 {
+		t.Errorf("expected 8:30, got %d:%d", DefaultTimeHour, DefaultTimeMinute)
+	}
+}
+
+func TestSetDefaultTaskTime_Invalid(t *testing.T) {
+	savedH, savedM := DefaultTimeHour, DefaultTimeMinute
+	defer func() { DefaultTimeHour, DefaultTimeMinute = savedH, savedM }()
+
+	invalid := []string{"abc", "25:00", "12:60", "12", "12:00:00"}
+	for _, s := range invalid {
+		if err := SetDefaultTaskTime(s); err == nil {
+			t.Errorf("expected error for %q", s)
+		}
+	}
+}
+
+func TestSetDefaultTaskTime_AffectsParseTaskDate(t *testing.T) {
+	savedH, savedM := DefaultTimeHour, DefaultTimeMinute
+	defer func() { DefaultTimeHour, DefaultTimeMinute = savedH, savedM }()
+
+	if err := SetDefaultTaskTime("08:30"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	dt, err := ParseTaskDate("today")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dt.Hour() != 8 || dt.Minute() != 30 {
+		t.Errorf("expected 8:30, got %d:%d", dt.Hour(), dt.Minute())
+	}
+}
+
+// --- Multi-tag ---
+
+func TestParseTaskString_MultipleTags(t *testing.T) {
+	task, err := ParseTaskString("Task #work #urgent")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.Tag != "work,urgent" {
+		t.Errorf("expected 'work,urgent', got %q", task.Tag)
+	}
+	if task.Name != "Task" {
+		t.Errorf("expected 'Task', got %q", task.Name)
+	}
+}
+
+func TestParseTaskString_SingleTag(t *testing.T) {
+	task, err := ParseTaskString("Task #shopping")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.Tag != "shopping" {
+		t.Errorf("expected 'shopping', got %q", task.Tag)
+	}
+}
+
+func TestParseTaskString_NoTags(t *testing.T) {
+	task, err := ParseTaskString("Task")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.Tag != "" {
+		t.Errorf("expected empty tag, got %q", task.Tag)
+	}
+}
+
+func TestParseTaskString_TagWithOtherFields(t *testing.T) {
+	task, err := ParseTaskString("Task #work #urgent +Project !high")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.Tag != "work,urgent" {
+		t.Errorf("expected 'work,urgent', got %q", task.Tag)
+	}
+	if task.Project != "Project" {
+		t.Errorf("expected 'Project', got %q", task.Project)
+	}
+	if task.Priority != "high" {
+		t.Errorf("expected 'high', got %q", task.Priority)
+	}
+	if task.Name != "Task" {
+		t.Errorf("expected 'Task', got %q", task.Name)
+	}
+}

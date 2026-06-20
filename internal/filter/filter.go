@@ -199,7 +199,23 @@ func filterByField(tasks []models.Task, values []string, getField func(models.Ta
 }
 
 func filterByTags(tasks []models.Task, tags []string) []models.Task {
-	return filterByField(tasks, tags, func(t models.Task) string { return t.Tag })
+	if len(tags) == 0 {
+		return tasks
+	}
+	var filtered []models.Task
+	for _, task := range tasks {
+		taskTags := strings.Split(task.Tag, ",")
+		for _, filterTag := range tags {
+			for _, taskTag := range taskTags {
+				if strings.EqualFold(strings.TrimSpace(taskTag), filterTag) {
+					filtered = append(filtered, task)
+					goto nextTask
+				}
+			}
+		}
+	nextTask:
+	}
+	return filtered
 }
 
 func filterByProjects(tasks []models.Task, projects []string) []models.Task {

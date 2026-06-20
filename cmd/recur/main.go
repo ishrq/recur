@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ishrq/recur/internal/commands"
 	"github.com/ishrq/recur/internal/db"
+	"github.com/ishrq/recur/internal/parser"
 	"github.com/ishrq/recur/internal/utils"
 	"os"
 )
@@ -23,6 +24,7 @@ func run() error {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 	config := utils.GetDefaultConfig()
+	_ = parser.SetDefaultTaskTime(config.DefaultTaskTime)
 	database, err := db.InitDB(config.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)

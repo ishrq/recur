@@ -128,7 +128,7 @@ func displayDashboard(database *sql.DB, showNote bool) error {
 	return nil
 }
 
-func displayCounts(database *sql.DB, fieldFn func(*models.Task) string, prefix, label string, lessFn func(a, b string) bool) error {
+func displayCounts(database *sql.DB, fieldFn func(*models.Task) []string, prefix, label string, lessFn func(a, b string) bool) error {
 	tasks, err := db.GetTasks(database, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to get tasks: %w", err)
@@ -136,8 +136,10 @@ func displayCounts(database *sql.DB, fieldFn func(*models.Task) string, prefix, 
 
 	counts := make(map[string]int)
 	for _, task := range tasks {
-		if v := fieldFn(&task); v != "" {
-			counts[v]++
+		for _, v := range fieldFn(&task) {
+			if v != "" {
+				counts[v]++
+			}
 		}
 	}
 
@@ -170,11 +172,21 @@ func displayCounts(database *sql.DB, fieldFn func(*models.Task) string, prefix, 
 }
 
 func displayTags(database *sql.DB) error {
-	return displayCounts(database, func(t *models.Task) string { return t.Tag }, "#", "Tags", nil)
+	return displayCounts(database, func(t *models.Task) []string {
+		if t.Tag == "" {
+			return nil
+		}
+		return strings.Split(t.Tag, ",")
+	}, "#", "Tags", nil)
 }
 
 func displayProjects(database *sql.DB) error {
-	return displayCounts(database, func(t *models.Task) string { return t.Project }, "+", "Projects", nil)
+	return displayCounts(database, func(t *models.Task) []string {
+		if t.Project == "" {
+			return nil
+		}
+		return []string{t.Project}
+	}, "+", "Projects", nil)
 }
 
 func priorityLess(a, b string) bool {
@@ -195,7 +207,12 @@ func priorityLess(a, b string) bool {
 }
 
 func displayPriorities(database *sql.DB) error {
-	return displayCounts(database, func(t *models.Task) string { return t.Priority }, "!", "Priorities", priorityLess)
+	return displayCounts(database, func(t *models.Task) []string {
+		if t.Priority == "" {
+			return nil
+		}
+		return []string{t.Priority}
+	}, "!", "Priorities", priorityLess)
 }
 
 func printTasks(tasks []models.Task, showNote bool) {
