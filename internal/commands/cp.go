@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/editor"
@@ -127,17 +126,7 @@ func duplicateTasksInPlace(database *sql.DB, tasks []models.Task) error {
 	// Duplicate tasks exactly
 	copied := 0
 	for _, task := range tasks {
-		newTask := &models.Task{
-			Name:           task.Name,
-			DueDate:        task.DueDate,
-			CreatedDate:    time.Now(),
-			Tag:            task.Tag,
-			Project:        task.Project,
-			Priority:       task.Priority,
-			Note:           task.Note,
-			RecurFrequency: task.RecurFrequency,
-			RecurEndDate:   task.RecurEndDate,
-		}
+		newTask := task.Clone()
 
 		newID, err := CreateTask(database, newTask)
 		if err != nil {
@@ -181,42 +170,9 @@ func copyWithModifications(database *sql.DB, tasks []models.Task, modifyStr stri
 	// Copy tasks with modifications
 	copied := 0
 	for _, task := range tasks {
-		// Create new task (copy of original)
-		newTask := &models.Task{
-			Name:           task.Name,
-			DueDate:        task.DueDate,
-			CreatedDate:    time.Now(),
-			Tag:            task.Tag,
-			Project:        task.Project,
-			Priority:       task.Priority,
-			Note:           task.Note,
-			RecurFrequency: task.RecurFrequency,
-			RecurEndDate:   task.RecurEndDate,
-		}
-
-		// Merge changes
-		newTask.Name = parsedChanges.Name
-		if parsedChanges.DueDate != nil {
-			newTask.DueDate = parsedChanges.DueDate
-		}
-		if parsedChanges.Tag != "" {
-			newTask.Tag = parsedChanges.Tag
-		}
-		if parsedChanges.Project != "" {
-			newTask.Project = parsedChanges.Project
-		}
-		if parsedChanges.Priority != "" {
-			newTask.Priority = parsedChanges.Priority
-		}
-		if parsedChanges.Note != "" {
-			newTask.Note = parsedChanges.Note
-		}
-		if parsedChanges.RecurFrequency != "" {
-			newTask.RecurFrequency = parsedChanges.RecurFrequency
-		}
-		if parsedChanges.RecurEndDate != nil {
-			newTask.RecurEndDate = parsedChanges.RecurEndDate
-		}
+		// Create new task (copy of original) with modifications
+		newTask := task.Clone()
+		newTask.Merge(parsedChanges)
 
 		newID, err := CreateTask(database, newTask)
 		if err != nil {
@@ -253,17 +209,7 @@ func copySingleTaskInEditor(database *sql.DB, task *models.Task) error {
 			continue
 		}
 
-		newTask := &models.Task{
-			Name:           editedTask.Name,
-			DueDate:        editedTask.DueDate,
-			CreatedDate:    time.Now(),
-			Tag:            editedTask.Tag,
-			Project:        editedTask.Project,
-			Priority:       editedTask.Priority,
-			Note:           editedTask.Note,
-			RecurFrequency: editedTask.RecurFrequency,
-			RecurEndDate:   editedTask.RecurEndDate,
-		}
+		newTask := editedTask.Clone()
 
 		hasChanges := editor.HasChanges(task, editedTask)
 
@@ -318,17 +264,7 @@ func copyMultipleTasksInEditor(database *sql.DB, tasks []models.Task) error {
 				continue
 			}
 
-			newTask := &models.Task{
-				Name:           editedTask.Name,
-				DueDate:        editedTask.DueDate,
-				CreatedDate:    time.Now(),
-				Tag:            editedTask.Tag,
-				Project:        editedTask.Project,
-				Priority:       editedTask.Priority,
-				Note:           editedTask.Note,
-				RecurFrequency: editedTask.RecurFrequency,
-				RecurEndDate:   editedTask.RecurEndDate,
-			}
+			newTask := editedTask.Clone()
 
 			newID, err := CreateTask(database, newTask)
 			if err != nil {

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/filter"
@@ -202,18 +201,9 @@ func handleRecurringTask(database *sql.DB, task *models.Task) error {
 		return nil
 	}
 
-	nextTask := &models.Task{
-		Name:           task.Name,
-		DueDate:        &nextDueDate,
-		CreatedDate:    time.Now(),
-		Tag:            task.Tag,
-		Project:        task.Project,
-		Priority:       task.Priority,
-		Note:           task.Note,
-		RecurFrequency: task.RecurFrequency,
-		RecurEndDate:   task.RecurEndDate,
-		LastTaskID:     &task.ID,
-	}
+	nextTask := task.Clone()
+	nextTask.DueDate = &nextDueDate
+	nextTask.LastTaskID = &task.ID
 
 	newID, err := CreateTask(database, nextTask)
 	if err != nil {

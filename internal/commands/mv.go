@@ -123,22 +123,7 @@ func Move(database *sql.DB, args []string) error {
 		oldName := task.Name
 
 		// Merge changes (new values override old ones)
-		task.Name = parsedChanges.Name
-		if parsedChanges.DueDate != nil {
-			task.DueDate = parsedChanges.DueDate
-		}
-		if parsedChanges.Tag != "" {
-			task.Tag = parsedChanges.Tag
-		}
-		if parsedChanges.Project != "" {
-			task.Project = parsedChanges.Project
-		}
-		if parsedChanges.Priority != "" {
-			task.Priority = parsedChanges.Priority
-		}
-		if parsedChanges.Note != "" {
-			task.Note = parsedChanges.Note
-		}
+		task.Merge(parsedChanges)
 
 		if err := db.UpdateTask(database, &task); err != nil {
 			fmt.Printf("Warning: Failed to update task #%d: %v\n", task.ID, err)
