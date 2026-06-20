@@ -43,36 +43,24 @@ func Done(database *sql.DB, args []string) error {
 }
 
 func completeTasks(database *sql.DB, ids []int, filters filter.Filters, undo bool) error {
-	var tasks []models.Task
 	var err error
+	var tasks []models.Task
 
 	if len(ids) > 0 {
-		for _, id := range ids {
-			task, err := db.GetTaskByID(database, id)
-			if err != nil {
-				fmt.Printf("Warning: Task #%d not found\n", id)
-				continue
+		tasks = collectTasksByID(database, ids, func(t *models.Task) (bool, string) {
+			if undo && t.CompletedDate == nil {
+				return false, fmt.Sprintf("Warning: Task #%d is not completed", t.ID)
 			}
-			if undo && task.CompletedDate == nil {
-				fmt.Printf("Warning: Task #%d is not completed\n", id)
-				continue
+			if !undo && t.CompletedDate != nil {
+				return false, fmt.Sprintf("Task #%d already completed", t.ID)
 			}
-			if !undo && task.CompletedDate != nil {
-				fmt.Printf("Task #%d already completed\n", id)
-				continue
+			if t.Deleted {
+				return false, fmt.Sprintf("Warning: Task #%d is deleted", t.ID)
 			}
-			if task.Deleted {
-				fmt.Printf("Warning: Task #%d is deleted\n", id)
-				continue
-			}
-			tasks = append(tasks, *task)
-		}
+			return true, ""
+		})
 	} else {
-		tasks, err = db.GetTasks(database, false, undo)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-		tasks, err = filter.ApplyFilters(tasks, filters)
+		tasks, err = collectTasksByFilter(database, filters, false, undo)
 		if err != nil {
 			return err
 		}

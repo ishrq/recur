@@ -10,7 +10,6 @@ import (
 
 	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/editor"
-	"github.com/ishrq/recur/internal/filter"
 	"github.com/ishrq/recur/internal/models"
 	"github.com/ishrq/recur/internal/parser"
 )
@@ -48,33 +47,18 @@ func Move(database *sql.DB, args []string) error {
 		}
 	}
 
-	// Collect tasks to edit
 	var tasksToEdit []models.Task
 	var err error
 
 	if len(ids) > 0 {
-		// Get tasks by IDs
-		for _, id := range ids {
-			task, err := db.GetTaskByID(database, id)
-			if err != nil {
-				fmt.Printf("Warning: Task #%d not found\n", id)
-				continue
+		tasksToEdit = collectTasksByID(database, ids, func(t *models.Task) (bool, string) {
+			if t.Deleted {
+				return false, fmt.Sprintf("Warning: Task #%d is deleted", t.ID)
 			}
-			if task.Deleted {
-				fmt.Printf("Warning: Task #%d is deleted\n", id)
-				continue
-			}
-			tasksToEdit = append(tasksToEdit, *task)
-		}
+			return true, ""
+		})
 	} else {
-		// Get all incomplete tasks for filtering
-		tasksToEdit, err = db.GetTasks(database, false, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-
-		// Apply filters
-		tasksToEdit, err = filter.ApplyFilters(tasksToEdit, filters)
+		tasksToEdit, err = collectTasksByFilter(database, filters, false, false)
 		if err != nil {
 			return err
 		}

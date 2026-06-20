@@ -114,24 +114,14 @@ func removeTasks(database *sql.DB, ids []int, filters filter.Filters, removeAll,
 
 	if restore {
 		if len(ids) > 0 {
-			for _, id := range ids {
-				task, err := db.GetTaskByID(database, id)
-				if err != nil {
-					fmt.Printf("Warning: Task #%d not found\n", id)
-					continue
+			tasks = collectTasksByID(database, ids, func(t *models.Task) (bool, string) {
+				if t.Deleted {
+					return true, ""
 				}
-				if task.Deleted {
-					tasks = append(tasks, *task)
-				} else {
-					fmt.Printf("Warning: Task #%d is not deleted\n", id)
-				}
-			}
+				return false, fmt.Sprintf("Warning: Task #%d is not deleted", t.ID)
+			})
 		} else {
-			tasks, err = db.GetTasks(database, true, false)
-			if err != nil {
-				return fmt.Errorf("failed to get deleted tasks: %w", err)
-			}
-			tasks, err = filter.ApplyFilters(tasks, filters)
+			tasks, err = collectTasksByFilter(database, filters, true, false)
 			if err != nil {
 				return err
 			}
@@ -146,18 +136,12 @@ func removeTasks(database *sql.DB, ids []int, filters filter.Filters, removeAll,
 		case removeDone:
 			tasks, err = db.GetTasks(database, false, true)
 		case len(ids) > 0:
-			for _, id := range ids {
-				task, err := db.GetTaskByID(database, id)
-				if err != nil {
-					fmt.Printf("Warning: Task #%d not found\n", id)
-					continue
+			tasks = collectTasksByID(database, ids, func(t *models.Task) (bool, string) {
+				if !t.Deleted {
+					return true, ""
 				}
-				if !task.Deleted {
-					tasks = append(tasks, *task)
-				} else {
-					fmt.Printf("Warning: Task #%d is already deleted\n", id)
-				}
-			}
+				return false, fmt.Sprintf("Warning: Task #%d is already deleted", t.ID)
+			})
 		default:
 			tasks, err = db.GetTasks(database, false, false)
 		}

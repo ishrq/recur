@@ -8,9 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ishrq/recur/internal/db"
 	"github.com/ishrq/recur/internal/editor"
-	"github.com/ishrq/recur/internal/filter"
 	"github.com/ishrq/recur/internal/models"
 	"github.com/ishrq/recur/internal/parser"
 )
@@ -51,33 +49,18 @@ func Copy(database *sql.DB, args []string) error {
 		}
 	}
 
-	// Collect tasks to copy
 	var tasksToCopy []models.Task
 	var err error
 
 	if len(ids) > 0 {
-		// Get tasks by IDs
-		for _, id := range ids {
-			task, err := db.GetTaskByID(database, id)
-			if err != nil {
-				fmt.Printf("Warning: Task #%d not found\n", id)
-				continue
+		tasksToCopy = collectTasksByID(database, ids, func(t *models.Task) (bool, string) {
+			if t.Deleted {
+				return false, fmt.Sprintf("Warning: Task #%d is deleted", t.ID)
 			}
-			if task.Deleted {
-				fmt.Printf("Warning: Task #%d is deleted\n", id)
-				continue
-			}
-			tasksToCopy = append(tasksToCopy, *task)
-		}
+			return true, ""
+		})
 	} else {
-		// Get all incomplete tasks for filtering
-		tasksToCopy, err = db.GetTasks(database, false, false)
-		if err != nil {
-			return fmt.Errorf("failed to get tasks: %w", err)
-		}
-
-		// Apply filters
-		tasksToCopy, err = filter.ApplyFilters(tasksToCopy, filters)
+		tasksToCopy, err = collectTasksByFilter(database, filters, false, false)
 		if err != nil {
 			return err
 		}
