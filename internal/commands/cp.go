@@ -1,10 +1,8 @@
 package commands
 
 import (
-	"bufio"
 	"database/sql"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -159,101 +157,69 @@ func copyWithModifications(database *sql.DB, tasks []models.Task, modifyStr stri
 }
 
 func copySingleTaskInEditor(database *sql.DB, task *models.Task) error {
-	content := editor.FormatTaskForEditor(task)
+	editedTask, err := openTaskInEditor(task)
+	if err != nil {
+		return err
+	}
 
-	for {
-		edited, err := editor.OpenEditor(content)
-		if err != nil {
-			return err
+	newTask := editedTask.Clone()
+	hasChanges := editor.HasChanges(task, editedTask)
+
+	newID, err := CreateTask(database, newTask)
+	if err != nil {
+		return fmt.Errorf("failed to create task: %w", err)
+	}
+
+	if hasChanges {
+		fmt.Printf("✓ Created new task #%d: %s\n", newID, newTask.Name)
+	} else {
+		fmt.Printf("✓ Duplicated #%d → #%d: %s\n", task.ID, newID, newTask.Name)
+	}
+	return nil
+}
+
+func copyMultipleTasksInEditor(database *sql.DB, tasks []models.Task) error {
+	editedTasks, err := openTasksInEditor(tasks)
+	if err != nil {
+		return err
+	}
+
+	copied := 0
+	for id, editedTask := range editedTasks {
+		var original *models.Task
+		for i := range tasks {
+			if tasks[i].ID == id {
+				original = &tasks[i]
+				break
+			}
 		}
 
-		editedTask, err := editor.ParseEditedTask(edited)
-		if err != nil {
-			fmt.Printf("\nError parsing edited task: %v\n", err)
-			fmt.Print("Press Enter to re-edit, or Ctrl+C to cancel: ")
-			bufio.NewReader(os.Stdin).ReadString('\n')
-			content = edited // Use the invalid content so user can fix it
+		if original == nil {
 			continue
 		}
 
 		newTask := editedTask.Clone()
 
-		hasChanges := editor.HasChanges(task, editedTask)
-
 		newID, err := CreateTask(database, newTask)
 		if err != nil {
-			return fmt.Errorf("failed to create task: %w", err)
-		}
-
-		if hasChanges {
-			fmt.Printf("✓ Created new task #%d: %s\n", newID, newTask.Name)
-		} else {
-			fmt.Printf("✓ Duplicated #%d → #%d: %s\n", task.ID, newID, newTask.Name)
-		}
-
-		return nil
-	}
-}
-
-func copyMultipleTasksInEditor(database *sql.DB, tasks []models.Task) error {
-	content := editor.FormatTasksForEditor(tasks)
-
-	for {
-		edited, err := editor.OpenEditor(content)
-		if err != nil {
-			return err
-		}
-
-		editedTasks, errors := editor.ParseEditedTasks(edited, tasks)
-
-		if len(errors) > 0 {
-			fmt.Println("\nErrors found:")
-			for _, err := range errors {
-				fmt.Printf("  - %v\n", err)
-			}
-			fmt.Print("\nPress Enter to re-edit, or Ctrl+C to cancel: ")
-			bufio.NewReader(os.Stdin).ReadString('\n')
-			content = edited // Use the invalid content so user can fix it
+			fmt.Printf("Warning: Failed to copy task #%d: %v\n", id, err)
 			continue
 		}
 
-		copied := 0
-		for id, editedTask := range editedTasks {
-			var original *models.Task
-			for i := range tasks {
-				if tasks[i].ID == id {
-					original = &tasks[i]
-					break
-				}
-			}
+		hasChanges := editor.HasChanges(original, editedTask)
 
-			if original == nil {
-				continue
-			}
-
-			newTask := editedTask.Clone()
-
-			newID, err := CreateTask(database, newTask)
-			if err != nil {
-				fmt.Printf("Warning: Failed to copy task #%d: %v\n", id, err)
-				continue
-			}
-
-			hasChanges := editor.HasChanges(original, editedTask)
-
-			if hasChanges {
-				fmt.Printf("✓ Created new task from #%d → #%d: %s\n", id, newID, newTask.Name)
-			} else {
-				fmt.Printf("✓ Duplicated #%d → #%d: %s\n", id, newID, newTask.Name)
-			}
-
-			copied++
+		if hasChanges {
+			fmt.Printf("✓ Created new task from #%d → #%d: %s\n", id, newID, newTask.Name)
+		} else {
+			fmt.Printf("✓ Duplicated #%d → #%d: %s\n", id, newID, newTask.Name)
 		}
 
-		if copied > 0 {
-			fmt.Printf("\n%d task(s) copied\n", copied)
-		}
-
-		return nil
+		copied++
 	}
+
+	if copied > 0 {
+		fmt.Printf("\n%d task(s) copied\n", copied)
+	}
+
+	return nil
 }
